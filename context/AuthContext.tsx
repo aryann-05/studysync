@@ -37,21 +37,37 @@ function getStoredUser(): User | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => getStoredUser());
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // IMPORTANT:
+  // Start with the same value on server and client.
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  // Read localStorage only after the browser has mounted.
+  useEffect(() => {
+    const storedUser = getStoredUser();
+
+    setUser(storedUser);
+    setMounted(true);
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+
     if (user) {
       localStorage.setItem("studysync_user", JSON.stringify(user));
     } else {
       localStorage.removeItem("studysync_user");
     }
-  }, [user]);
+  }, [user, mounted]);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     setIsLoading(true);
+
     try {
       const response = await authService.login(credentials);
+
       setToken(response.data.token);
       setUser(response.data.user);
     } finally {
@@ -61,8 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async (credentials: RegisterCredentials) => {
     setIsLoading(true);
+
     try {
       const response = await authService.register(credentials);
+
       setToken(response.data.token);
       setUser(response.data.user);
     } finally {
@@ -72,8 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = useCallback(async () => {
     setIsLoading(true);
+
     try {
       const response = await authService.googleLogin();
+
       setToken(response.data.token);
       setUser(response.data.user);
     } finally {
@@ -83,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     setIsLoading(true);
+
     try {
       await authService.logout();
     } finally {
@@ -113,12 +134,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export function useAuthContext(): AuthContextValue {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuthContext must be used within an AuthProvider");
-  }
-  return context;
-}
-
