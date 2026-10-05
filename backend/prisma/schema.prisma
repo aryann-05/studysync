@@ -1,0 +1,96 @@
+// StudySync Prisma Schema
+// Database: PostgreSQL 15+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  user_id         String         @id @default(uuid()) @db.Uuid
+  email           String         @unique @db.VarChar(255)
+  password_hash   String         @db.VarChar(255)
+  full_name       String         @db.VarChar(100)
+  daily_max_hours Decimal        @default(4.0) @db.Decimal(3, 1)
+  created_at      DateTime       @default(now()) @db.Timestamptz
+
+  study_plans     StudyPlan[]
+  study_sessions  StudySession[]
+  fcm_tokens      FcmToken[]
+
+  @@map("users")
+}
+
+model StudyPlan {
+  plan_id     String         @id @default(uuid()) @db.Uuid
+  user_id     String         @db.Uuid
+  course_name String         @db.VarChar(150)
+  start_date  DateTime       @db.Date
+  exam_date   DateTime       @db.Date
+  is_active   Boolean        @default(true)
+  created_at  DateTime       @default(now()) @db.Timestamptz
+
+  user        User           @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  topics      Topic[]
+
+  @@index([user_id])
+  @@map("study_plans")
+}
+
+model Topic {
+  topic_id          String         @id @default(uuid()) @db.Uuid
+  plan_id           String         @db.Uuid
+  parent_topic_id   String?        @db.Uuid
+  title             String         @db.VarChar(255)
+  estimated_hours   Decimal        @default(1.00) @db.Decimal(4, 2)
+  difficulty_weight Decimal        @default(1.00) @db.Decimal(3, 2)
+  ease_factor       Decimal        @default(2.50) @db.Decimal(4, 2)
+  repetition_number Int            @default(0)
+
+  plan              StudyPlan      @relation(fields: [plan_id], references: [plan_id], onDelete: Cascade)
+  parent_topic      Topic?         @relation("TopicHierarchy", fields: [parent_topic_id], references: [topic_id], onDelete: SetNull)
+  subtopics         Topic[]        @relation("TopicHierarchy")
+  study_sessions    StudySession[]
+
+  @@index([plan_id])
+  @@index([parent_topic_id])
+  @@map("topics")
+}
+
+model StudySession {
+  session_id       String    @id @default(uuid()) @db.Uuid
+  user_id          String    @db.Uuid
+  topic_id         String    @db.Uuid
+  scheduled_date   DateTime  @db.Date
+  duration_hours   Decimal   @db.Decimal(3, 1)
+  session_type     String    @default("INITIAL") @db.VarChar(30)
+  is_completed     Boolean   @default(false)
+  confidence_score Int?      @db.Integer
+  completed_at     DateTime? @db.Timestamptz
+
+  user             User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  topic            Topic     @relation(fields: [topic_id], references: [topic_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([topic_id])
+  @@index([scheduled_date])
+  @@index([user_id, scheduled_date])
+  @@map("study_sessions")
+}
+
+model FcmToken {
+  token_id   String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  token      String   @db.Text
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  user       User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("fcm_tokens")
+}
+

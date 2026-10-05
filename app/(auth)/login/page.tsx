@@ -23,6 +23,8 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -32,6 +34,8 @@ export default function LoginPage() {
       rememberMe: true,
     },
   });
+
+  const rememberMe = watch("rememberMe");
 
   const onSubmit = async (data: LoginFormData) => {
     setError(null);
@@ -151,8 +155,14 @@ export default function LoginPage() {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Checkbox id="rememberMe" {...register("rememberMe")} />
-            <Label htmlFor="rememberMe" className="text-sm font-normal">
+            <Checkbox
+              id="rememberMe"
+              checked={rememberMe}
+              onCheckedChange={(checked) => {
+                setValue("rememberMe", checked === true);
+              }}
+            />
+            <Label htmlFor="rememberMe" className="text-sm font-normal cursor-pointer">
               Remember me
             </Label>
           </div>

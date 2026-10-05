@@ -25,6 +25,8 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -36,6 +38,8 @@ export default function RegisterPage() {
       agreeToTerms: false,
     },
   });
+
+  const agreeToTerms = watch("agreeToTerms");
 
   const onSubmit = async (data: RegisterFormData) => {
     setError(null);
@@ -213,10 +217,16 @@ export default function RegisterPage() {
         <div className="flex items-start gap-2">
           <Checkbox
             id="agreeToTerms"
+            checked={agreeToTerms}
+            onCheckedChange={(checked) => {
+              setValue("agreeToTerms", checked === true, {
+                shouldValidate: true,
+                shouldDirty: true,
+              });
+            }}
             aria-invalid={!!errors.agreeToTerms}
-            {...register("agreeToTerms")}
           />
-          <Label htmlFor="agreeToTerms" className="text-sm font-normal">
+          <Label htmlFor="agreeToTerms" className="text-sm font-normal cursor-pointer">
             I agree to the{" "}
             <Link href="/terms" className="text-primary hover:underline">
               Terms of Service
