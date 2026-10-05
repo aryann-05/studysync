@@ -178,3 +178,67 @@ export interface NotificationGroup {
   notifications: Notification[];
 }
 
+export interface QuizQuestion {
+  question_id: string;
+  topic_id?: string | null;
+  topic_title: string;
+  question_text: string;
+  options: string[];
+  marks?: number;
+  correct_index?: number;
+  explanation?: string;
+  selected_index?: number;
+  is_correct?: boolean;
+}
+
+export interface WeakTopicFocus {
+  topic_title: string;
+  topic_id?: string | null;
+  total_questions?: number;
+  correct_count?: number;
+  mistakes: number;
+  accuracy_percent: number;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  recommendation: string;
+  attempts_count?: number;
+  lowest_accuracy?: number;
+}
+
+export interface QuizAttemptRecord {
+  attempt_id: string;
+  score: number;
+  total_marks: number;
+  percentage: number;
+  grade: "Mastered" | "Needs Revision" | "Critical Focus Required";
+  feedback: string;
+  weak_topics: WeakTopicFocus[];
+  completed_at: string;
+}
+
+export interface Quiz {
+  quiz_id: string;
+  plan_id: string;
+  module_name: string;
+  quiz_number: number;
+  title: string;
+  description: string;
+  scheduled_date: string;
+  total_marks: number;
+  question_count?: number;
+  questions?: QuizQuestion[];
+  is_completed?: boolean;
+  latest_attempt?: QuizAttemptRecord | null;
+}
+
+export interface QuizSubmissionResult {
+  attempt: QuizAttemptRecord;
+  quiz_title: string;
+  score: number;
+  total_marks: number;
+  percentage: number;
+  grade: string;
+  weak_topics: WeakTopicFocus[];
+  feedback: string;
+  questions: QuizQuestion[];
+}
+

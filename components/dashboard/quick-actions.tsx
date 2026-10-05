@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Upload, CalendarDays, BookOpen, BarChart3 } from "lucide-react";
+import { Upload, CalendarDays, BookOpen, BarChart3, HelpCircle } from "lucide-react";
 import { DashboardCard } from "./dashboard-card";
 
 const actions = [
@@ -18,6 +18,13 @@ const actions = [
     href: "/study",
     icon: BookOpen,
     color: "text-accent bg-accent/10",
+  },
+  {
+    label: "Module Quizzes",
+    description: "Test & find weak topics",
+    href: "/quiz",
+    icon: HelpCircle,
+    color: "text-violet-600 bg-violet-500/10",
   },
   {
     label: "View Calendar",
@@ -41,7 +48,7 @@ export function QuickActions() {
       title="Quick Actions"
       description="Shortcuts to common tasks"
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {actions.map((action) => {
           const Icon = action.icon;
           return (

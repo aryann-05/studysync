@@ -16,6 +16,7 @@ import calendarRoutes from "./routes/calendarRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import quizRoutes from "./routes/quizRoutes.js";
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use("/api/v1/calendar", calendarRoutes);
 app.use("/api/v1/sessions", sessionRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/quizzes", quizRoutes);
 
 // Catch-all route for undefined endpoints (404)
 app.use((req, res) => {

@@ -8,6 +8,7 @@ import {
   User,
   Settings,
   Bell,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export const NAV_LINKS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "Upload Syllabus", href: "/upload", icon: Upload },
   { label: "Calendar", href: "/calendar", icon: CalendarDays },
   { label: "Study Session", href: "/study", icon: BookOpen },
+  { label: "Quizzes", href: "/quiz", icon: HelpCircle },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Progress", href: "/progress", icon: TrendingUp },
 ];

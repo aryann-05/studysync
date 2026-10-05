@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,10 @@ import {
   Timer,
   AlertTriangle,
   ArrowLeft,
+  Play,
+  Pause,
+  RotateCcw,
+  HelpCircle,
 } from "lucide-react";
 import { useStudyPlan } from "@/hooks/useStudyPlan";
 
@@ -41,6 +45,44 @@ export default function StudySessionPage() {
   const [notes, setNotes] = useState("");
   const [completed, setCompleted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Live Study Timer state
+  const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // Interval timer tick
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isTimerRunning) {
+      interval = setInterval(() => {
+        setSecondsElapsed((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning]);
+
+  // Reset timer on topic change
+  useEffect(() => {
+    if (currentTopic?.id) {
+      setSecondsElapsed(0);
+      setIsTimerRunning(false);
+    }
+  }, [currentTopic?.id]);
+
+  const formatTimer = (totalSecs: number) => {
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hrs > 0) {
+      return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const studiedHours = (secondsElapsed / 3600).toFixed(2);
+  const studiedMinutes = Math.max(1, Math.round(secondsElapsed / 60));
 
   const confidenceOptions = [
     {
@@ -77,12 +119,17 @@ export default function StudySessionPage() {
 
   const handleComplete = async () => {
     setSubmitting(true);
+    setIsTimerRunning(false);
     try {
+      const studiedTimeFormatted = `${studiedHours} hrs (${studiedMinutes} mins)`;
+      const finalDuration = secondsElapsed >= 60 ? studiedMinutes : currentTopicDetails?.estimatedMinutes || 60;
       if (currentTopic && selectedConfidence) {
         await submitConfidence(currentTopic.id, selectedConfidence, {
           topicName: currentTopic.name,
-          duration: currentTopic.estimatedMinutes,
-          notes: notes || undefined,
+          duration: finalDuration,
+          notes: notes
+            ? `${notes} [Study Duration Tracked: ${studiedTimeFormatted}]`
+            : `[Study Duration Tracked: ${studiedTimeFormatted}]`,
         });
       } else if (currentTopic) {
         markTopicCompleted(currentTopic.id);
@@ -102,6 +149,8 @@ export default function StudySessionPage() {
     }
     setSelectedConfidence(null);
     setNotes("");
+    setSecondsElapsed(0);
+    setIsTimerRunning(false);
     setCompleted(false);
   };
 
@@ -120,6 +169,9 @@ export default function StudySessionPage() {
               future sessions accordingly.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
+              <Badge variant="secondary" className="px-3 py-1 text-xs font-semibold">
+                ⏱️ Studied: {studiedHours} hrs ({studiedMinutes} mins)
+              </Badge>
               {selectedConfidence && (
                 <Badge
                   variant={
@@ -139,6 +191,10 @@ export default function StudySessionPage() {
               <Button variant="outline" onClick={() => router.push("/calendar")}>
                 <ArrowLeft className="mr-1.5 h-4 w-4" />
                 Back to Calendar
+              </Button>
+              <Button variant="outline" onClick={() => router.push("/quiz")}>
+                <HelpCircle className="mr-1.5 h-4 w-4 text-primary" />
+                Module Quizzes
               </Button>
               <Button onClick={handleNextTopic}>
                 <RefreshCw className="mr-1.5 h-4 w-4" />
@@ -242,23 +298,119 @@ export default function StudySessionPage() {
             </div>
           </div>
 
-          {/* Study timer */}
-          <div className="mt-4 rounded-lg border bg-muted/30 p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Study timer</span>
-              <span className="text-2xl font-bold tabular-nums">00:00</span>
+          {/* Live Study Session Timer */}
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/[0.03] p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "h-2.5 w-2.5 rounded-full transition-colors",
+                      isTimerRunning ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/40"
+                    )}
+                  />
+                  <span className="text-sm font-semibold text-foreground">Live Study Session Timer</span>
+                  <Badge variant="outline" className="text-[11px] font-medium capitalize">
+                    {isTimerRunning ? "Tracking Time" : secondsElapsed > 0 ? "Paused" : "Ready"}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Click &apos;Start Timer&apos; to automatically measure how many hours you study this topic.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-left sm:text-right">
+                  <div className="font-mono text-3xl font-extrabold tracking-tight text-foreground tabular-nums">
+                    {formatTimer(secondsElapsed)}
+                  </div>
+                  <div className="text-[11px] font-semibold text-primary">
+                    {studiedHours} hours studied
+                  </div>
+                </div>
+              </div>
             </div>
-            <Progress value={currentTopicDetails.actualMinutes} className="mt-3" />
-            <p className="mt-2 text-xs text-muted-foreground">
-              {formatDuration(
-                Math.max(
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {!isTimerRunning ? (
+                <Button
+                  type="button"
+                  onClick={() => setIsTimerRunning(true)}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
+                  size="sm"
+                >
+                  <Play className="h-4 w-4 fill-white" />
+                  {secondsElapsed > 0 ? "Resume Timer" : "Start Timer"}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsTimerRunning(false)}
+                  className="gap-2 border-amber-500/40 text-amber-600 hover:bg-amber-500/10 font-medium"
+                  size="sm"
+                >
+                  <Pause className="h-4 w-4" />
+                  Pause Timer
+                </Button>
+              )}
+
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setIsTimerRunning(false);
+                  setSecondsElapsed(0);
+                }}
+                disabled={secondsElapsed === 0}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                size="sm"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSecondsElapsed((prev) => prev + 300)}
+                className="text-xs h-8 ml-auto"
+                size="sm"
+              >
+                +5 Mins
+              </Button>
+            </div>
+
+            <div className="mt-4 border-t pt-3">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <span>Session Target Effort</span>
+                <span>
+                  {Math.min(
+                    100,
+                    Math.round(
+                      (secondsElapsed / (Math.max(1, currentTopicDetails.estimatedMinutes) * 60)) * 100
+                    )
+                  )}%
+                </span>
+              </div>
+              <Progress
+                value={Math.min(
+                  100,
+                  Math.round(
+                    (secondsElapsed / (Math.max(1, currentTopicDetails.estimatedMinutes) * 60)) * 100
+                  )
+                )}
+                className="h-2"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Target: {formatDuration(currentTopicDetails.estimatedMinutes)} ·{" "}
+                {Math.max(
                   0,
-                  currentTopicDetails.estimatedMinutes -
-                    currentTopicDetails.actualMinutes
-                )
-              )}{" "}
-              remaining for this session
-            </p>
+                  Math.round(currentTopicDetails.estimatedMinutes - secondsElapsed / 60)
+                )}{" "}
+                minutes remaining to reach estimated effort
+              </p>
+            </div>
           </div>
 
           {/* Study notes */}

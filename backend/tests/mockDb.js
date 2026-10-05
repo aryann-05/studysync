@@ -4,6 +4,8 @@ import StudyPlan from "../src/models/StudyPlan.js";
 import Topic from "../src/models/Topic.js";
 import StudySession from "../src/models/StudySession.js";
 import FcmToken from "../src/models/FcmToken.js";
+import Quiz from "../src/models/Quiz.js";
+import QuizAttempt from "../src/models/QuizAttempt.js";
 
 /**
  * In-memory Mock Data Store for Mongoose Models
@@ -14,6 +16,8 @@ export const tables = {
   topics: [],
   studySessions: [],
   fcmTokens: [],
+  quizzes: [],
+  quizAttempts: [],
 };
 
 export const resetMockDb = () => {
@@ -22,6 +26,8 @@ export const resetMockDb = () => {
   tables.topics = [];
   tables.studySessions = [];
   tables.fcmTokens = [];
+  tables.quizzes = [];
+  tables.quizAttempts = [];
 };
 
 // Helper to create a Mongoose query chain (thenable)
@@ -245,5 +251,88 @@ export const setupMockMongoose = () => {
   FcmToken.find = (filter) =>
     createQuery(() => {
       return tables.fcmTokens.filter((t) => matchFilter(t, filter)).map((t) => ({ ...t }));
+    });
+
+  // 6. Quiz
+  Quiz.create = async (data) => {
+    const record = {
+      quiz_id: data.quiz_id || uuidv4(),
+      plan_id: data.plan_id,
+      user_id: data.user_id,
+      module_name: data.module_name,
+      quiz_number: data.quiz_number,
+      title: data.title,
+      description: data.description || "",
+      scheduled_date: data.scheduled_date instanceof Date ? data.scheduled_date : new Date(data.scheduled_date),
+      total_marks: data.total_marks || 5,
+      questions: (data.questions || []).map((q) => ({
+        question_id: q.question_id || uuidv4(),
+        topic_id: q.topic_id || null,
+        topic_title: q.topic_title,
+        question_text: q.question_text,
+        options: q.options || [],
+        correct_index: q.correct_index,
+        explanation: q.explanation || "",
+        marks: q.marks || 1,
+      })),
+      created_at: new Date(),
+    };
+    tables.quizzes.push(record);
+    return { ...record };
+  };
+
+  Quiz.findOne = (filter) =>
+    createQuery(() => {
+      const found = tables.quizzes.find((q) => matchFilter(q, filter));
+      return found ? { ...found } : null;
+    });
+
+  Quiz.find = (filter) =>
+    createQuery((select, sort) => {
+      let results = tables.quizzes.filter((q) => matchFilter(q, filter));
+      if (sort?.scheduled_date === 1) {
+        results.sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+      }
+      return results.map((q) => ({ ...q }));
+    });
+
+  // 7. QuizAttempt
+  QuizAttempt.create = async (data) => {
+    const record = {
+      attempt_id: data.attempt_id || uuidv4(),
+      quiz_id: data.quiz_id,
+      user_id: data.user_id,
+      plan_id: data.plan_id,
+      module_name: data.module_name || "",
+      score: data.score,
+      total_marks: data.total_marks,
+      percentage: data.percentage,
+      grade: data.grade,
+      answers: data.answers || [],
+      weak_topics: data.weak_topics || [],
+      feedback: data.feedback || "",
+      completed_at: new Date(),
+    };
+    tables.quizAttempts.push(record);
+    return { ...record };
+  };
+
+  QuizAttempt.findOne = (filter) =>
+    createQuery((select, sort) => {
+      let matches = tables.quizAttempts.filter((a) => matchFilter(a, filter));
+      if (sort?.completed_at === -1) {
+        matches.sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
+      }
+      const match = matches[0];
+      return match ? { ...match } : null;
+    });
+
+  QuizAttempt.find = (filter) =>
+    createQuery((select, sort) => {
+      let results = tables.quizAttempts.filter((a) => matchFilter(a, filter));
+      if (sort?.completed_at === -1) {
+        results.sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
+      }
+      return results.map((a) => ({ ...a }));
     });
 };
