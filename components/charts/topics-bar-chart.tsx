@@ -11,19 +11,21 @@ import {
   YAxis,
 } from "recharts";
 import { ChartContainer, getChartColors } from "./chart-container";
-import { dummyChartData } from "@/lib/dummy-data";
 
 interface TopicsBarChartProps {
+  data?: Array<{ subject: string; hours: number; color: string }>;
   title?: string;
   description?: string;
 }
 
 export function TopicsBarChart({
+  data = [
+    { subject: "General", hours: 4, color: "var(--primary)" },
+  ],
   title = "Study Hours by Subject",
   description = "Total hours per subject",
 }: TopicsBarChartProps) {
   const colors = getChartColors();
-  const data = dummyChartData.subjectHours;
 
   return (
     <ChartContainer title={title} description={description}>

@@ -1,20 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { NotificationCard } from "@/components/notifications/notification-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCheck, Inbox } from "lucide-react";
-import { dummyNotifications } from "@/lib/dummy-data";
-import { groupByDate, getUnreadCount } from "@/services/notifications";
+import { CheckCheck, Inbox, Loader2 } from "lucide-react";
+import {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  deleteNotification,
+  groupByDate,
+  getUnreadCount,
+} from "@/services/notifications";
+import type { Notification } from "@/types";
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(dummyNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<
     "all" | "unread" | "reminder" | "revision" | "missed" | "exam"
   >("all");
+
+  const loadNotifs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await getNotifications();
+      if (res.success) {
+        setNotifications(res.data);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifs();
+  }, [loadNotifs]);
 
   const unreadCount = getUnreadCount(notifications);
 
@@ -27,14 +51,21 @@ export default function NotificationsPage() {
 
   const grouped = groupByDate(filtered);
 
-  const markAllRead = () => {
+  const handleMarkAllRead = async () => {
+    await markAllAsRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const markRead = (id: string) => {
+  const handleMarkRead = async (id: string) => {
+    await markAsRead(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteNotification(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const filters: { value: typeof activeFilter; label: string }[] = [
@@ -58,7 +89,7 @@ export default function NotificationsPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={markAllRead}
+          onClick={handleMarkAllRead}
           disabled={unreadCount === 0}
         >
           <CheckCheck className="h-4 w-4" />
@@ -101,7 +132,7 @@ export default function NotificationsPage() {
                 <NotificationCard
                   key={notification.id}
                   notification={notification}
-                  onMarkRead={markRead}
+                  onMarkRead={handleMarkRead}
                 />
               ))}
             </div>

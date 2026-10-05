@@ -11,16 +11,26 @@ import {
   YAxis,
 } from "recharts";
 import { ChartContainer, getChartColors } from "./chart-container";
-import { dummyWeeklyHours } from "@/lib/dummy-data";
+import type { WeeklyHours } from "@/types";
+
+const DEFAULT_WEEKLY_HOURS: WeeklyHours[] = [
+  { day: "Mon", hours: 0, target: 4 },
+  { day: "Tue", hours: 0, target: 4 },
+  { day: "Wed", hours: 0, target: 4 },
+  { day: "Thu", hours: 0, target: 4 },
+  { day: "Fri", hours: 0, target: 4 },
+  { day: "Sat", hours: 0, target: 4 },
+  { day: "Sun", hours: 0, target: 4 },
+];
 
 interface WeeklyHoursChartProps {
-  data?: typeof dummyWeeklyHours;
+  data?: WeeklyHours[];
   title?: string;
   description?: string;
 }
 
 export function WeeklyHoursChart({
-  data = dummyWeeklyHours,
+  data = DEFAULT_WEEKLY_HOURS,
   title = "Weekly Study Hours",
   description = "Hours studied vs. daily target",
 }: WeeklyHoursChartProps) {

@@ -11,37 +11,31 @@ import type { UploadedFile } from "@/types";
 
 interface FileUploadProps {
   onFileSelected?: (file: File) => void;
+  isUploading?: boolean;
+  uploadProgress?: number;
 }
 
-export function FileUpload({ onFileSelected }: FileUploadProps) {
-  const {
-    isUploading,
-    uploadProgress,
-    handleFileSelect,
-    handleRemoveFile,
-  } = useUpload();
+export function FileUpload({
+  onFileSelected,
+  isUploading: propIsUploading,
+  uploadProgress: propUploadProgress,
+}: FileUploadProps) {
+  const internalUpload = useUpload();
+  const isUploading = propIsUploading ?? internalUpload.isUploading;
+  const uploadProgress = propUploadProgress ?? internalUpload.uploadProgress;
 
   const [dragActive, setDragActive] = useState(false);
-  const [localFiles, setLocalFiles] = useState<UploadedFile[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(
     async (file: File) => {
-      onFileSelected?.(file);
-      await handleFileSelect(file);
-      setLocalFiles((prev) => [
-        ...prev,
-        {
-          id: "local-" + Date.now(),
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          uploadProgress: 100,
-          uploadedAt: new Date(),
-        },
-      ]);
+      if (onFileSelected) {
+        onFileSelected(file);
+      } else {
+        await internalUpload.handleFileSelect(file);
+      }
     },
-    [handleFileSelect, onFileSelected]
+    [onFileSelected, internalUpload]
   );
 
   const handleDrop = useCallback(
@@ -63,10 +57,7 @@ export function FileUpload({ onFileSelected }: FileUploadProps) {
     [processFile]
   );
 
-  const removeLocalFile = (id: string) => {
-    setLocalFiles((prev) => prev.filter((f) => f.id !== id));
-    handleRemoveFile(id);
-  };
+
 
   return (
     <div className="space-y-4">
@@ -134,36 +125,6 @@ export function FileUpload({ onFileSelected }: FileUploadProps) {
             <span className="text-muted-foreground">{Math.round(uploadProgress)}%</span>
           </div>
           <Progress value={uploadProgress} className="mt-2" />
-        </div>
-      )}
-
-      {localFiles.length > 0 && (
-        <div className="space-y-2">
-          {localFiles.map((file) => (
-            <div
-              key={file.id}
-              className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <FileText className="h-5 w-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{file.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatFileSize(file.size)} · Uploaded just now
-                </p>
-              </div>
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeLocalFile(file.id)}
-                aria-label={`Remove ${file.name}`}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
         </div>
       )}
     </div>

@@ -10,19 +10,21 @@ import {
   YAxis,
 } from "recharts";
 import { ChartContainer, getChartColors } from "./chart-container";
-import { dummyChartData } from "@/lib/dummy-data";
 
 interface ProgressChartProps {
+  data?: Array<{ month: string; sessions: number; hours: number }>;
   title?: string;
   description?: string;
 }
 
 export function ProgressChart({
+  data = [
+    { month: "Current", sessions: 4, hours: 6 },
+  ],
   title = "Progress",
   description = "Monthly study sessions",
 }: ProgressChartProps) {
   const colors = getChartColors();
-  const data = dummyChartData.monthlyActivity;
 
   return (
     <ChartContainer title={title} description={description}>

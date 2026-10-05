@@ -2,18 +2,20 @@
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { ChartContainer, getChartColors } from "./chart-container";
-import { dummyChartData } from "@/lib/dummy-data";
 
 interface MasteryPieChartProps {
+  data?: Array<{ name: string; value: number; color: string }>;
   title?: string;
   description?: string;
 }
 
 export function MasteryPieChart({
+  data = [
+    { name: "Active", value: 1, color: "var(--primary)" },
+  ],
   title = "Topic Distribution",
   description = "Status of all topics",
 }: MasteryPieChartProps) {
-  const data = dummyChartData.topicDistribution;
 
   return (
     <ChartContainer title={title} description={description}>

@@ -43,14 +43,14 @@ export const validateLogin = (req, res, next) => {
  * Validate study plan generation payload
  */
 export const validatePlanGeneration = (req, res, next) => {
-  const { course_name, file_id, start_date, exam_date, daily_max_hours } = req.body;
+  const { course_name, file_id, modules, start_date, exam_date, daily_max_hours } = req.body;
 
   if (!course_name || typeof course_name !== "string" || course_name.trim().length === 0) {
     return sendError(res, "course_name is required.", "VALIDATION_ERROR", 422);
   }
 
-  if (!file_id || typeof file_id !== "string") {
-    return sendError(res, "file_id is required.", "VALIDATION_ERROR", 422);
+  if (!file_id && (!modules || !Array.isArray(modules) || modules.length === 0)) {
+    return sendError(res, "file_id or valid modules array is required.", "VALIDATION_ERROR", 422);
   }
 
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;

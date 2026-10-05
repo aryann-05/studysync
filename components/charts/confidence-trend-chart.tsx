@@ -10,16 +10,22 @@ import {
   YAxis,
 } from "recharts";
 import { ChartContainer, getChartColors } from "./chart-container";
-import { dummyConfidenceTrend } from "@/lib/dummy-data";
+import type { ConfidenceDataPoint } from "@/types";
+
+const DEFAULT_CONFIDENCE_TREND: ConfidenceDataPoint[] = [
+  { date: "Day 1", score: 60 },
+  { date: "Day 2", score: 70 },
+  { date: "Day 3", score: 80 },
+];
 
 interface ConfidenceTrendChartProps {
-  data?: typeof dummyConfidenceTrend;
+  data?: ConfidenceDataPoint[];
   title?: string;
   description?: string;
 }
 
 export function ConfidenceTrendChart({
-  data = dummyConfidenceTrend,
+  data = DEFAULT_CONFIDENCE_TREND,
   title = "Confidence Trend",
   description = "Average confidence score over time",
 }: ConfidenceTrendChartProps) {

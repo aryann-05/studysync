@@ -24,6 +24,7 @@
     "mongoose": "^9.10.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
+    "pdf-parse": "^2.4.5",
     "uuid": "^14.0.2"
   },
   "devDependencies": {

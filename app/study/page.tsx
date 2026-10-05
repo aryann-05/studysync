@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,12 @@ import {
   RefreshCw,
   Timer,
   AlertTriangle,
+  ArrowLeft,
 } from "lucide-react";
 import { useStudyPlan } from "@/hooks/useStudyPlan";
 
 export default function StudySessionPage() {
+  const router = useRouter();
   const {
     currentTopic,
     topics,
@@ -72,11 +75,11 @@ export default function StudySessionPage() {
     ? topics.find((t) => t.id === currentTopic.id) ?? currentTopic
     : null;
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     setSubmitting(true);
-    setTimeout(() => {
+    try {
       if (currentTopic && selectedConfidence) {
-        submitConfidence(currentTopic.id, selectedConfidence, {
+        await submitConfidence(currentTopic.id, selectedConfidence, {
           topicName: currentTopic.name,
           duration: currentTopic.estimatedMinutes,
           notes: notes || undefined,
@@ -85,8 +88,9 @@ export default function StudySessionPage() {
         markTopicCompleted(currentTopic.id);
       }
       setCompleted(true);
+    } finally {
       setSubmitting(false);
-    }, 800);
+    }
   };
 
   const handleNextTopic = () => {
@@ -131,10 +135,16 @@ export default function StudySessionPage() {
               )}
               <Badge variant="outline">Plan updated</Badge>
             </div>
-            <Button onClick={handleNextTopic}>
-              <RefreshCw className="h-4 w-4" />
-              Next Topic
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button variant="outline" onClick={() => router.push("/calendar")}>
+                <ArrowLeft className="mr-1.5 h-4 w-4" />
+                Back to Calendar
+              </Button>
+              <Button onClick={handleNextTopic}>
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+                Next Topic
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

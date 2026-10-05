@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useStudyContext } from "@/context/StudyContext";
 import type { StudyPlan, StudySession, Topic } from "@/types";
-import { generateStudyPlan, getStudyPlan } from "@/services/scheduler";
+import { generateStudyPlan, getStudyPlan, submitSessionConfidence } from "@/services/scheduler";
 
 export function useStudyPlan() {
   const {
@@ -16,6 +16,7 @@ export function useStudyPlan() {
     markTopicCompleted,
     markTopicMissed,
     addSession,
+    refreshStudyData,
   } = useStudyContext();
 
   const [plan, setPlan] = useState<StudyPlan | null>(null);
@@ -27,7 +28,7 @@ export function useStudyPlan() {
     setError(null);
     try {
       const response = await getStudyPlan();
-      if (response.success) {
+      if (response.success && response.data) {
         setPlan(response.data);
         setTopics(response.data.topics);
       }
@@ -58,7 +59,7 @@ export function useStudyPlan() {
   );
 
   const submitConfidence = useCallback(
-    (
+    async (
       topicId: string,
       confidence: Topic["confidence"],
       session?: Partial<StudySession>
@@ -66,21 +67,24 @@ export function useStudyPlan() {
       updateTopicConfidence(topicId, confidence);
       markTopicCompleted(topicId);
 
-      if (session) {
-        addSession({
-          id: "session-" + Date.now(),
-          topicId,
-          topicName: session.topicName ?? "",
-          date: new Date().toISOString().split("T")[0],
-          startTime: session.startTime ?? "09:00",
-          duration: session.duration ?? 60,
-          confidence,
-          completed: true,
-          notes: session.notes,
-        });
+      const targetSession =
+        sessions.find((s) => s.topicId === topicId && !s.completed) ||
+        sessions.find((s) => s.topicId === topicId);
+
+      if (targetSession) {
+        try {
+          await submitSessionConfidence(
+            targetSession.id,
+            confidence,
+            session?.notes
+          );
+          await refreshStudyData();
+        } catch (err) {
+          console.error("Failed to submit confidence to backend:", err);
+        }
       }
     },
-    [updateTopicConfidence, markTopicCompleted, addSession]
+    [sessions, updateTopicConfidence, markTopicCompleted, refreshStudyData]
   );
 
   return {

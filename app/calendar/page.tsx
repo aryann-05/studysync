@@ -6,18 +6,37 @@ import { Calendar } from "@/components/calendar/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, ListTodo, CalendarClock, Plus } from "lucide-react";
+import { CheckCircle2, ListTodo, CalendarClock, Plus, RefreshCw } from "lucide-react";
 import { useStudyContext } from "@/context/StudyContext";
 import { getTodayTasks, getUpcomingRevisions } from "@/lib/helpers";
-import { formatDuration, formatDate } from "@/lib/utils";
+import { formatDuration, formatDate, cn } from "@/lib/utils";
+import { reshufflePlan } from "@/services/scheduler";
 import type { Topic } from "@/types";
 
 export default function CalendarPage() {
-  const { topics } = useStudyContext();
+  const { topics, refreshStudyData } = useStudyContext();
   const [selectedTopics, setSelectedTopics] = useState<Topic[]>([]);
+  const [reshuffling, setReshuffling] = useState(false);
+  const [reshuffleMessage, setReshuffleMessage] = useState<string | null>(null);
+
   const todayTasks = getTodayTasks(topics).slice(0, 4);
   const upcoming = getUpcomingRevisions(topics, 5);
   const newTopics = topics.filter((t) => t.status === "new").slice(0, 5);
+
+  const handleReshuffle = async () => {
+    setReshuffling(true);
+    setReshuffleMessage(null);
+    try {
+      const res = await reshufflePlan();
+      await refreshStudyData();
+      setReshuffleMessage(res.message || "Schedule successfully reshuffled.");
+      setTimeout(() => setReshuffleMessage(null), 5000);
+    } catch (err) {
+      setReshuffleMessage(err instanceof Error ? err.message : "Reshuffling failed");
+    } finally {
+      setReshuffling(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -25,13 +44,31 @@ export default function CalendarPage() {
         title="Study Calendar"
         description="Visualize your study schedule, revisions, and completed topics."
       >
-        <Button size="sm" asChild>
-          <a href="/upload">
-            <Plus className="h-4 w-4" />
-            Add Syllabus
-          </a>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleReshuffle}
+            disabled={reshuffling}
+            className="gap-1.5"
+          >
+            <RefreshCw className={cn("h-4 w-4", reshuffling && "animate-spin")} />
+            {reshuffling ? "Reshuffling..." : "Reshuffle Schedule"}
+          </Button>
+          <Button size="sm" asChild>
+            <a href="/upload">
+              <Plus className="h-4 w-4" />
+              Add Syllabus
+            </a>
+          </Button>
+        </div>
       </PageHeader>
+
+      {reshuffleMessage && (
+        <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+          {reshuffleMessage}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <div className="lg:col-span-3">

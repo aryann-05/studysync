@@ -74,5 +74,44 @@ describe("Study Plan Generation API Endpoints", () => {
     expect(res.body.status).toBe("error");
     expect(res.body.error.code).toBe("SCHEDULE_OVERLOAD");
   });
+
+  it("should extract topics and curriculum summary from uploaded file", async () => {
+    const res = await request(app)
+      .post("/api/v1/plans/extract-topics")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ file_id: fileId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("success");
+    expect(res.body.data).toHaveProperty("summary");
+    expect(res.body.data).toHaveProperty("modules");
+    expect(Array.isArray(res.body.data.modules)).toBe(true);
+    expect(res.body.data.summary.total_modules).toBeGreaterThan(0);
+  });
+
+  it("should retrieve the active study plan and its sessions", async () => {
+    // Generate a plan first
+    await request(app)
+      .post("/api/v1/plans/generate")
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        course_name: "Active Plan Course",
+        file_id: fileId,
+        start_date: "2026-08-01",
+        exam_date: "2026-10-15",
+        daily_max_hours: 4.0,
+      });
+
+    const res = await request(app)
+      .get("/api/v1/plans/active")
+      .set("Authorization", `Bearer ${authToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("success");
+    expect(res.body.data.plan).not.toBeNull();
+    expect(res.body.data.plan.course_name).toBe("Active Plan Course");
+    expect(res.body.data.plan.topics.length).toBeGreaterThan(0);
+    expect(res.body.data.plan.sessions.length).toBeGreaterThan(0);
+  });
 });
 

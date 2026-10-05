@@ -10,19 +10,21 @@ import {
   YAxis,
 } from "recharts";
 import { ChartContainer, getChartColors } from "./chart-container";
-import { dummyChartData } from "@/lib/dummy-data";
 
 interface HoursAreaChartProps {
+  data?: Array<{ month: string; sessions: number; hours: number }>;
   title?: string;
   description?: string;
 }
 
 export function HoursAreaChart({
+  data = [
+    { month: "Current", sessions: 4, hours: 8 },
+  ],
   title = "Monthly Study Hours",
   description = "Total hours studied per month",
 }: HoursAreaChartProps) {
   const colors = getChartColors();
-  const data = dummyChartData.monthlyActivity;
 
   return (
     <ChartContainer title={title} description={description}>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Timer } from "lucide-react";
 import { DashboardCard } from "./dashboard-card";
-import { EXAM_DATE } from "@/lib/constants";
+import { useStudyContext } from "@/context/StudyContext";
 import { getDaysUntil } from "@/lib/utils";
 
 interface TimeLeft {
@@ -13,12 +13,15 @@ interface TimeLeft {
   seconds: number;
 }
 
-function getTimeLeft(): TimeLeft {
+function getTimeLeft(targetDateStr?: string | null): TimeLeft {
+  if (!targetDateStr) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  }
   const now = new Date();
-  const target = new Date(EXAM_DATE);
+  const target = new Date(targetDateStr);
   const diff = target.getTime() - now.getTime();
 
-  if (diff <= 0) {
+  if (isNaN(diff) || diff <= 0) {
     return { days: 0, hours: 0, minutes: 0, seconds: 0 };
   }
 
@@ -31,15 +34,18 @@ function getTimeLeft(): TimeLeft {
 }
 
 export function ExamCountdown() {
-  const [timeLeft, setTimeLeft] = useState<TimeLeft>(() => getTimeLeft());
-  const daysUntil = getDaysUntil(EXAM_DATE);
+  const { activePlan } = useStudyContext();
+  const examDate = activePlan?.examDate || null;
+  const [timeLeft, setTimeLeft] = useState<TimeLeft>(() => getTimeLeft(examDate));
+  const daysUntil = examDate ? getDaysUntil(examDate) : 0;
 
   useEffect(() => {
+    setTimeLeft(getTimeLeft(examDate));
     const interval = setInterval(() => {
-      setTimeLeft(getTimeLeft());
+      setTimeLeft(getTimeLeft(examDate));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [examDate]);
 
   const units = [
     { label: "Days", value: timeLeft.days },

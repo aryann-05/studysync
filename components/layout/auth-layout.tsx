@@ -2,11 +2,14 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { GraduationCap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { GraduationCap, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
 
 export function AuthLayout({ children }: { children: ReactNode }) {
+  const router = useRouter();
   return (
     <div className="relative flex min-h-screen bg-background">
       <div className="pointer-events-none absolute inset-0 bg-grid opacity-40 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
@@ -68,7 +71,17 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </span>
             {APP_NAME}
           </Link>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
             <ThemeToggle />
           </div>
         </div>
