@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { StudyPlan, StudySession, Topic } from "@/types";
 import { getStudyPlan } from "@/services/scheduler";
-import { getToken } from "@/services/api";
+import { getToken, getRefreshToken } from "@/services/api";
 
 interface StudyContextValue {
   topics: Topic[];
@@ -34,6 +34,30 @@ interface StudyContextValue {
 
 const StudyContext = createContext<StudyContextValue | undefined>(undefined);
 
+function getCachedStudyData(): {
+  activePlan: StudyPlan | null;
+  topics: Topic[];
+  sessions: StudySession[];
+} | null {
+  if (typeof window === "undefined") return null;
+  const stored = localStorage.getItem("studysync_cached_study_data");
+  if (!stored) return null;
+  try {
+    const parsed = JSON.parse(stored);
+    if (parsed?.activePlan) {
+      if (parsed.activePlan.createdAt) {
+        parsed.activePlan.createdAt = new Date(parsed.activePlan.createdAt);
+      }
+      if (parsed.activePlan.updatedAt) {
+        parsed.activePlan.updatedAt = new Date(parsed.activePlan.updatedAt);
+      }
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function StudyProvider({ children }: { children: ReactNode }) {
   const [topics, setTopicsState] = useState<Topic[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -41,13 +65,41 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const [currentTopic, setCurrentTopic] = useState<Topic | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Restore cached study data on client mount to prevent data loss on refresh
+  useEffect(() => {
+    const cached = getCachedStudyData();
+    if (cached) {
+      if (cached.activePlan) setActivePlan(cached.activePlan);
+      if (cached.topics && cached.topics.length > 0) setTopicsState(cached.topics);
+      if (cached.sessions && cached.sessions.length > 0) setSessions(cached.sessions);
+    }
+  }, []);
+
+  // Sync state changes to localStorage cache
+  useEffect(() => {
+    if (activePlan || topics.length > 0 || sessions.length > 0) {
+      localStorage.setItem(
+        "studysync_cached_study_data",
+        JSON.stringify({
+          activePlan,
+          topics,
+          sessions,
+        })
+      );
+    }
+  }, [activePlan, topics, sessions]);
+
   const refreshStudyData = useCallback(async () => {
     const token = getToken();
-    if (!token) {
+    const refreshToken = getRefreshToken();
+    if (!token && !refreshToken) {
       setTopicsState([]);
       setSessions([]);
       setActivePlan(null);
       setCurrentTopic(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("studysync_cached_study_data");
+      }
       return;
     }
 
@@ -58,13 +110,27 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         setActivePlan(response.data);
         setTopicsState(response.data.topics);
         setSessions(response.data.sessions);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "studysync_cached_study_data",
+            JSON.stringify({
+              activePlan: response.data,
+              topics: response.data.topics,
+              sessions: response.data.sessions,
+            })
+          );
+        }
       } else {
         setActivePlan(null);
         setTopicsState([]);
         setSessions([]);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("studysync_cached_study_data");
+        }
       }
     } catch (err) {
-      console.error("Failed to load study data:", err);
+      console.error("Failed to load study data from server:", err);
+      // Keep cached data so user doesn't experience data loss on temporary error
     } finally {
       setIsLoading(false);
     }

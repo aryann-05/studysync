@@ -118,5 +118,37 @@ export const refreshUserToken = async (refreshToken) => {
   };
 
   const newAccessToken = generateAccessToken(payload);
-  return { access_token: newAccessToken };
+  const newRefreshToken = generateRefreshToken({ user_id: user.user_id });
+
+  return {
+    access_token: newAccessToken,
+    refresh_token: newRefreshToken,
+    user: {
+      user_id: user.user_id,
+      full_name: user.full_name,
+      email: user.email,
+      daily_max_hours: Number(user.daily_max_hours) || 4.0,
+    },
+  };
+};
+
+/**
+ * Retrieve current user session details
+ */
+export const getCurrentUser = async (userId) => {
+  const user = await User.findOne({ user_id: userId });
+  if (!user) {
+    const error = new Error("User session not found.");
+    error.statusCode = 404;
+    error.code = "USER_NOT_FOUND";
+    throw error;
+  }
+
+  return {
+    user_id: user.user_id,
+    full_name: user.full_name,
+    email: user.email,
+    daily_max_hours: Number(user.daily_max_hours) || 4.0,
+    created_at: user.created_at,
+  };
 };

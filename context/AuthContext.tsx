@@ -10,7 +10,13 @@ import {
 } from "react";
 import type { LoginCredentials, RegisterCredentials, User } from "@/types";
 import * as authService from "@/services/auth";
-import { clearToken, setToken } from "@/services/api";
+import {
+  clearTokens,
+  getToken,
+  getRefreshToken,
+  setToken,
+  setRefreshToken,
+} from "@/services/api";
 
 interface AuthContextValue {
   user: User | null;
@@ -21,6 +27,7 @@ interface AuthContextValue {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => void;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -30,28 +37,69 @@ function getStoredUser(): User | null {
   const stored = localStorage.getItem("studysync_user");
   if (!stored) return null;
   try {
-    return JSON.parse(stored) as User;
+    const parsed = JSON.parse(stored);
+    if (parsed && parsed.createdAt) {
+      parsed.createdAt = new Date(parsed.createdAt);
+    }
+    return parsed as User;
   } catch {
     return null;
   }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // IMPORTANT:
-  // Start with the same value on server and client.
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  // Read localStorage only after the browser has mounted.
+  // Initialize session on mount without flashing logged-out state
   useEffect(() => {
-    const storedUser = getStoredUser();
+    let isCancelled = false;
 
-    setUser(storedUser);
-    setMounted(true);
-    setIsLoading(false);
+    async function initSession() {
+      const storedUser = getStoredUser();
+      const token = getToken();
+      const refreshToken = getRefreshToken();
+
+      // Immediately restore from local storage to prevent any UI flicker
+      if (storedUser) {
+        setUser(storedUser);
+      }
+      setMounted(true);
+
+      // If user was logged in, verify session with backend in background
+      if (token || refreshToken) {
+        try {
+          const res = await authService.getMe();
+          if (!isCancelled && res.success && res.data) {
+            setUser(res.data);
+            localStorage.setItem("studysync_user", JSON.stringify(res.data));
+          }
+        } catch {
+          // If getMe failed, axios interceptor attempted refresh.
+          // If both tokens were invalid/expired, they were cleared.
+          if (!getToken() && !getRefreshToken()) {
+            if (!isCancelled) {
+              setUser(null);
+              localStorage.removeItem("studysync_user");
+            }
+          }
+        }
+      }
+
+      if (!isCancelled) {
+        setIsLoading(false);
+      }
+    }
+
+    initSession();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
+  // Sync user state changes to localStorage
   useEffect(() => {
     if (!mounted) return;
 
@@ -64,12 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     setIsLoading(true);
-
     try {
       const response = await authService.login(credentials);
-
       setToken(response.data.token);
+      if (response.data.refreshToken) {
+        setRefreshToken(response.data.refreshToken);
+      }
       setUser(response.data.user);
+      localStorage.setItem("studysync_user", JSON.stringify(response.data.user));
     } finally {
       setIsLoading(false);
     }
@@ -77,12 +127,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async (credentials: RegisterCredentials) => {
     setIsLoading(true);
-
     try {
       const response = await authService.register(credentials);
-
       setToken(response.data.token);
+      if (response.data.refreshToken) {
+        setRefreshToken(response.data.refreshToken);
+      }
       setUser(response.data.user);
+      localStorage.setItem("studysync_user", JSON.stringify(response.data.user));
     } finally {
       setIsLoading(false);
     }
@@ -90,31 +142,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = useCallback(async () => {
     setIsLoading(true);
-
     try {
       const response = await authService.googleLogin();
-
       setToken(response.data.token);
+      if (response.data.refreshToken) {
+        setRefreshToken(response.data.refreshToken);
+      }
       setUser(response.data.user);
+      localStorage.setItem("studysync_user", JSON.stringify(response.data.user));
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const response = await authService.refreshSession();
+      setUser(response.data.user);
+      localStorage.setItem("studysync_user", JSON.stringify(response.data.user));
+    } catch (err) {
+      clearTokens();
+      setUser(null);
+      localStorage.removeItem("studysync_user");
+      throw err;
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     setIsLoading(true);
-
     try {
       await authService.logout();
     } finally {
-      clearToken();
+      clearTokens();
+      localStorage.removeItem("studysync_user");
+      localStorage.removeItem("studysync_cached_study_data");
       setUser(null);
       setIsLoading(false);
     }
   }, []);
 
   const updateUser = useCallback((data: Partial<User>) => {
-    setUser((prev) => (prev ? { ...prev, ...data } : prev));
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...data };
+      localStorage.setItem("studysync_user", JSON.stringify(updated));
+      return updated;
+    });
   }, []);
 
   return (
@@ -128,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         logout,
         updateUser,
+        refreshSession,
       }}
     >
       {children}

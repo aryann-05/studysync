@@ -121,5 +121,89 @@ describe("Authentication API Endpoints", () => {
       expect(res.body.error.code).toBe("INVALID_TOKEN");
     });
   });
+
+  describe("GET /api/v1/auth/me", () => {
+    it("should return the authenticated user profile with a valid token", async () => {
+      const { user, token } = await createTestUser({
+        email: "session_user@test.com",
+        full_name: "Session Test User",
+      });
+
+      const res = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.status).toBe("success");
+      expect(res.body.data.user_id).toBe(user.user_id);
+      expect(res.body.data.email).toBe("session_user@test.com");
+      expect(res.body.data.full_name).toBe("Session Test User");
+      expect(res.body.data).not.toHaveProperty("password_hash");
+    });
+
+    it("should reject unauthenticated request with 401", async () => {
+      const res = await request(app).get("/api/v1/auth/me").expect(401);
+      expect(res.body.status).toBe("error");
+      expect(res.body.error.code).toBe("UNAUTHORIZED");
+    });
+  });
+
+  describe("POST /api/v1/auth/refresh", () => {
+    it("should issue a new access token and refresh token given a valid refresh token", async () => {
+      const { user } = await createTestUser({
+        email: "refresh_user@test.com",
+      });
+
+      const loginRes = await request(app)
+        .post("/api/v1/auth/login")
+        .send({
+          email: "refresh_user@test.com",
+          password: "Password@123",
+        })
+        .expect(200);
+
+      const refreshToken = loginRes.body.data.refresh_token;
+      expect(refreshToken).toBeDefined();
+
+      const refreshRes = await request(app)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: refreshToken })
+        .expect(200);
+
+      expect(refreshRes.body.status).toBe("success");
+      expect(refreshRes.body.data).toHaveProperty("access_token");
+      expect(refreshRes.body.data).toHaveProperty("refresh_token");
+      expect(refreshRes.body.data.user.email).toBe("refresh_user@test.com");
+
+      // Verify the new access token can be used on protected routes
+      const newAccessToken = refreshRes.body.data.access_token;
+      const meRes = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${newAccessToken}`)
+        .expect(200);
+
+      expect(meRes.body.data.user_id).toBe(user.user_id);
+    });
+
+    it("should reject request with missing refresh token with 401", async () => {
+      const res = await request(app)
+        .post("/api/v1/auth/refresh")
+        .send({})
+        .expect(401);
+
+      expect(res.body.status).toBe("error");
+      expect(res.body.error.code).toBe("MISSING_REFRESH_TOKEN");
+    });
+
+    it("should reject request with invalid refresh token with 401", async () => {
+      const res = await request(app)
+        .post("/api/v1/auth/refresh")
+        .send({ refresh_token: "invalid.jwt.token" })
+        .expect(401);
+
+      expect(res.body.status).toBe("error");
+      expect(res.body.error.code).toBe("INVALID_REFRESH_TOKEN");
+    });
+  });
 });
 
