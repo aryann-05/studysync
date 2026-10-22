@@ -62,4 +62,58 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
+/**
+ * Optional Authentication: Attaches req.user if a valid token is present,
+ * but allows unauthenticated visitors to proceed with req.user = null.
+ */
+export const optionalAuthenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      req.user = null;
+      return next();
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = verifyToken(token);
+    } catch {
+      req.user = null;
+      return next();
+    }
+
+    if (decoded && decoded.user_id) {
+      let user = null;
+      try {
+        user = await User.findOne({ user_id: decoded.user_id }).select("user_id email full_name daily_max_hours");
+      } catch {
+        // DB lookup failure fallback
+      }
+
+      req.user = user
+        ? {
+            user_id: user.user_id,
+            email: user.email,
+            full_name: user.full_name,
+            daily_max_hours: Number(user.daily_max_hours) || 4.0,
+          }
+        : {
+            user_id: decoded.user_id,
+            email: decoded.email,
+            full_name: decoded.full_name || "User",
+            daily_max_hours: 4.0,
+          };
+    } else {
+      req.user = null;
+    }
+
+    next();
+  } catch {
+    req.user = null;
+    next();
+  }
+};
+
 export default authenticate;
+

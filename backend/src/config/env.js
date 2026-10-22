@@ -21,6 +21,14 @@ export const config = {
       ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
       : "",
   },
+  ai: {
+    openaiApiKey: (process.env.OPENAI_API_KEY || "").trim(),
+    openaiModel: (process.env.OPENAI_MODEL || "gpt-4o-mini").trim(),
+    openaiBaseUrl: (process.env.OPENAI_BASE_URL || "").trim(),
+    geminiApiKey: (process.env.GEMINI_API_KEY || process.env.AI_API_KEY || "").trim(),
+    geminiModel: (process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(),
+  },
 };
 
 export default config;
+

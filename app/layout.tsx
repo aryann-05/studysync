@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/context/Providers";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Chatbot } from "@/components/chatbot/chatbot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -66,7 +67,10 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-background text-foreground">
         <Providers>
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          <TooltipProvider delayDuration={200}>
+            {children}
+            <Chatbot />
+          </TooltipProvider>
         </Providers>
       </body>
     </html>
