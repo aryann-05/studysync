@@ -206,6 +206,7 @@ export interface RegisterCredentials {
   email: string;
   password: string;
   confirmPassword: string;
+  role?: "admin" | "user";
 }
 
 export interface ChangePasswordData {

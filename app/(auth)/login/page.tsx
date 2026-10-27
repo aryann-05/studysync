@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -12,8 +12,6 @@ import {
   LogIn,
   ShieldCheck,
   GraduationCap,
-  Sparkles,
-  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +28,17 @@ export default function LoginPage() {
   const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Read role from query parameters if present (e.g. /login?role=admin)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const roleParam = params.get("role");
+      if (roleParam === "admin" || roleParam === "user") {
+        setSelectedRole(roleParam);
+      }
+    }
+  }, []);
 
   const {
     register,
@@ -51,16 +60,6 @@ export default function LoginPage() {
   const handleRoleChange = (role: "user" | "admin") => {
     setSelectedRole(role);
     setError(null);
-  };
-
-  const handleFillAdminDemo = () => {
-    setValue("email", "admin@studysync.com", { shouldValidate: true });
-    setValue("password", "Admin@123", { shouldValidate: true });
-  };
-
-  const handleFillUserDemo = () => {
-    setValue("email", "student@example.com", { shouldValidate: true });
-    setValue("password", "Student@123", { shouldValidate: true });
   };
 
   const onSubmit = async (data: LoginFormData) => {
@@ -100,7 +99,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
+      setError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
     }
   };
 
@@ -172,30 +171,8 @@ export default function LoginPage() {
             Admin Portal Sign In
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Sign in to access user management and system metrics
+            Sign in with your administrator credentials
           </p>
-
-          {/* Quick Fill Admin Demo Box */}
-          <div className="mt-4 p-3 rounded-lg border border-amber-500/25 bg-amber-500/5 text-left text-xs flex items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-amber-700 dark:text-amber-300">
-                Demo Admin Account
-              </p>
-              <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
-                admin@studysync.com • Admin@123
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleFillAdminDemo}
-              className="h-7 text-xs border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 shrink-0"
-            >
-              <Sparkles className="h-3 w-3 mr-1" />
-              Auto-Fill
-            </Button>
-          </div>
         </div>
       ) : (
         <div className="text-center">
@@ -239,10 +216,7 @@ export default function LoginPage() {
         </>
       )}
 
-      {/* Role Notice for Admin if needed */}
-      {selectedRole === "admin" && (
-        <div className="mt-4" />
-      )}
+      {selectedRole === "admin" && <div className="mt-6" />}
 
       {error && (
         <div
@@ -263,7 +237,7 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
-              placeholder={selectedRole === "admin" ? "admin@studysync.com" : "you@example.com"}
+              placeholder={selectedRole === "admin" ? "admin@example.com" : "you@example.com"}
               className="pl-10"
               autoComplete="email"
               aria-invalid={!!errors.email}
@@ -317,15 +291,6 @@ export default function LoginPage() {
               Remember me
             </Label>
           </div>
-          {selectedRole === "user" && (
-            <button
-              type="button"
-              onClick={handleFillUserDemo}
-              className="text-xs text-muted-foreground hover:text-primary transition-colors"
-            >
-              Fill Demo Student
-            </button>
-          )}
         </div>
 
         <Button
@@ -357,28 +322,21 @@ export default function LoginPage() {
         </Button>
       </form>
 
+      {/* Role-Specific Registration Links */}
       {selectedRole === "admin" ? (
-        <div className="mt-6 rounded-lg bg-muted/40 border border-border/50 p-3 text-center text-xs text-muted-foreground">
-          <p className="flex items-center justify-center gap-1.5 font-medium">
-            <Info className="h-3.5 w-3.5 text-amber-500" />
-            Administrative credentials are managed by system administrators.
-          </p>
-          <p className="mt-1">
-            Need to study? Switch to the{" "}
-            <button
-              type="button"
-              onClick={() => handleRoleChange("user")}
-              className="text-primary hover:underline font-semibold"
-            >
-              User / Student login
-            </button>
-            .
-          </p>
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          Don&apos;t have an admin account?{" "}
+          <Link
+            href="/register?role=admin"
+            className="font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+          >
+            Register as Admin
+          </Link>
         </div>
       ) : (
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-primary hover:underline">
+          <Link href="/register?role=user" className="font-medium text-primary hover:underline">
             Sign up free
           </Link>
         </p>

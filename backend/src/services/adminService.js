@@ -396,6 +396,10 @@ export const deleteUser = async (userId, adminUserId) => {
  * Securely provision an initial default Admin account if no admin exists
  */
 export const provisionDefaultAdmin = async () => {
+  if (process.env.PROVISION_DEMO_ADMIN !== "true") {
+    return null;
+  }
+
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@studysync.com").toLowerCase().trim();
   const adminPassword = process.env.ADMIN_PASSWORD || "Admin@123";
 

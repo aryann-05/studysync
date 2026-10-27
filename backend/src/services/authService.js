@@ -7,7 +7,7 @@ const BCRYPT_SALT_ROUNDS = 12;
 /**
  * Register a new user with 12 bcrypt salt rounds and MongoDB storage
  */
-export const registerUser = async ({ full_name, email, password }) => {
+export const registerUser = async ({ full_name, email, password, role = "user" }) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   // Check duplicate email
@@ -22,24 +22,27 @@ export const registerUser = async ({ full_name, email, password }) => {
   // Hash password with 12 salt rounds
   const password_hash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-  // Create user document with guaranteed "user" role
+  // Allow role-based registration: admin or user (defaults to user)
+  const assignedRole = role === "admin" ? "admin" : "user";
+  const assignedAccountType = assignedRole === "admin" ? "regular" : "student";
+
   const newUser = await User.create({
     full_name,
     email: normalizedEmail,
     password_hash,
     daily_max_hours: 4.0,
-    role: "user",
+    role: assignedRole,
     status: "active",
-    account_type: "student",
+    account_type: assignedAccountType,
   });
 
   return {
     user_id: newUser.user_id,
     full_name: newUser.full_name,
     email: newUser.email,
-    role: newUser.role || "user",
+    role: newUser.role || assignedRole,
     status: newUser.status || "active",
-    account_type: newUser.account_type || "student",
+    account_type: newUser.account_type || assignedAccountType,
     daily_max_hours: newUser.daily_max_hours,
     created_at: newUser.created_at,
   };

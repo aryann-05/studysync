@@ -9,8 +9,8 @@ describe("Two-Role Authentication & Admin Dashboard API", () => {
     resetDatabase();
   });
 
-  describe("Role Enforcement on Public Registration", () => {
-    it("should strictly assign 'user' role by default during public registration", async () => {
+  describe("Role-Based Registration", () => {
+    it("should assign 'user' role by default during registration when no role is specified", async () => {
       const res = await request(app)
         .post("/api/v1/auth/register")
         .send({
@@ -25,23 +25,23 @@ describe("Two-Role Authentication & Admin Dashboard API", () => {
       expect(res.body.data.status).toBe("active");
     });
 
-    it("should ignore or disallow client-supplied 'admin' role in registration payload", async () => {
+    it("should support role-based registration for 'admin' role to create custom admin accounts", async () => {
       const res = await request(app)
         .post("/api/v1/auth/register")
         .send({
-          full_name: "Sneaky Hacker",
-          email: "hacker@example.com",
+          full_name: "Custom Admin",
+          email: "custom.admin@example.com",
           password: "Password@123",
-          role: "admin", // Client attempt to escalate privileges
+          role: "admin",
         });
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.role).toBe("user"); // Still strictly "user"!
+      expect(res.body.data.role).toBe("admin");
 
       // Verify in DB directly
-      const savedUser = await User.findOne({ email: "hacker@example.com" });
-      expect(savedUser.role).toBe("user");
+      const savedUser = await User.findOne({ email: "custom.admin@example.com" });
+      expect(savedUser.role).toBe("admin");
     });
   });
 

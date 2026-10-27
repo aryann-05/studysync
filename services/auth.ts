@@ -90,8 +90,8 @@ export async function login(
       data: {
         user: {
           id: isAdmin ? "admin-1" : "user-1",
-          name: isAdmin ? "StudySync Admin" : "Alex Thompson",
-          email: credentials.email || (isAdmin ? "admin@studysync.com" : "alex.thompson@example.com"),
+          name: isAdmin ? (credentials.email ? credentials.email.split("@")[0] : "Administrator") : "Alex Thompson",
+          email: credentials.email,
           role: isAdmin ? "admin" : "user",
           status: "active",
           accountType: isAdmin ? "regular" : "student",
@@ -114,11 +114,19 @@ export async function register(
     const res = await post<{
       status: string;
       message: string;
-      data: { user_id: string; full_name: string; email: string };
+      data: {
+        user_id: string;
+        full_name: string;
+        email: string;
+        role?: "admin" | "user";
+        status?: "active" | "inactive";
+        account_type?: "student" | "regular";
+      };
     }>("/auth/register", {
       full_name: credentials.name,
       email: credentials.email,
       password: credentials.password,
+      role: credentials.role || "user",
     });
 
     let token = "token-" + Date.now();
@@ -132,6 +140,9 @@ export async function register(
             user_id: string;
             full_name: string;
             email: string;
+            role?: "admin" | "user";
+            status?: "active" | "inactive";
+            account_type?: "student" | "regular";
             daily_max_hours: number;
             created_at?: string;
           };
@@ -155,13 +166,17 @@ export async function register(
       // login fallback
     }
 
+    const assignedRole: "admin" | "user" =
+      credentials.role || (res.data as any)?.role || "user";
     const userData: User = {
       id: res.data?.user_id || "user-1",
       name: credentials.name,
       email: credentials.email,
-      role: (res.data as any)?.role || "user",
+      role: assignedRole,
       status: (res.data as any)?.status || "active",
-      accountType: (res.data as any)?.account_type || "student",
+      accountType:
+        (res.data as any)?.account_type ||
+        (assignedRole === "admin" ? "regular" : "student"),
       studyHoursPerDay: 4,
       theme: "light",
       emailNotifications: true,
@@ -183,18 +198,22 @@ export async function register(
       throw new Error(backendMessage);
     }
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY));
-    const mockToken = "mock-jwt-token-" + Date.now();
+    const assignedRole: "admin" | "user" =
+      credentials.role ||
+      (credentials.email?.toLowerCase().includes("admin") ? "admin" : "user");
+    const mockToken =
+      "mock-jwt-token-" + (assignedRole === "admin" ? "admin-" : "user-") + Date.now();
     setToken(mockToken);
     return {
       success: true,
       data: {
         user: {
-          id: "user-1",
+          id: assignedRole === "admin" ? "admin-" + Date.now() : "user-" + Date.now(),
           name: credentials.name,
           email: credentials.email,
-          role: "user",
+          role: assignedRole,
           status: "active",
-          accountType: "student",
+          accountType: assignedRole === "admin" ? "regular" : "student",
           studyHoursPerDay: 4,
           theme: "light",
           emailNotifications: true,

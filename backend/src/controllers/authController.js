@@ -6,8 +6,8 @@ import { sendSuccess } from "../utils/response.js";
  */
 export const register = async (req, res, next) => {
   try {
-    const { full_name, email, password } = req.body;
-    const user = await authService.registerUser({ full_name, email, password });
+    const { full_name, email, password, role } = req.body;
+    const user = await authService.registerUser({ full_name, email, password, role });
 
     return sendSuccess(
       res,
