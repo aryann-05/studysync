@@ -35,6 +35,8 @@ const createQuery = (resultFn) => {
   const query = {
     _select: null,
     _sort: null,
+    _skip: 0,
+    _limit: null,
     select(fields) {
       this._select = fields;
       return this;
@@ -43,9 +45,39 @@ const createQuery = (resultFn) => {
       this._sort = fields;
       return this;
     },
+    skip(n) {
+      this._skip = n;
+      return this;
+    },
+    limit(n) {
+      this._limit = n;
+      return this;
+    },
+    lean() {
+      return this;
+    },
     then(resolve, reject) {
       try {
-        const res = resultFn(this._select, this._sort);
+        let res = resultFn(this._select, this._sort);
+        if (Array.isArray(res)) {
+          if (this._sort) {
+            for (const [key, dir] of Object.entries(this._sort)) {
+              res = [...res].sort((a, b) => {
+                const aVal = a[key] instanceof Date ? a[key].getTime() : a[key];
+                const bVal = b[key] instanceof Date ? b[key].getTime() : b[key];
+                if (aVal < bVal) return dir === -1 ? 1 : -1;
+                if (aVal > bVal) return dir === -1 ? -1 : 1;
+                return 0;
+              });
+            }
+          }
+          if (this._skip) {
+            res = res.slice(this._skip);
+          }
+          if (this._limit !== null && this._limit !== undefined) {
+            res = res.slice(0, this._limit);
+          }
+        }
         resolve(res);
       } catch (err) {
         reject(err);
@@ -60,7 +92,28 @@ const matchFilter = (item, filter) => {
   if (!filter) return true;
 
   for (const [key, val] of Object.entries(filter)) {
+    if (key === "$or" && Array.isArray(val)) {
+      const anyMatch = val.some((subFilter) => matchFilter(item, subFilter));
+      if (!anyMatch) return false;
+      continue;
+    }
+
+    if (val instanceof RegExp) {
+      if (!val.test(String(item[key] || ""))) return false;
+      continue;
+    }
+
     if (val !== null && typeof val === "object" && !(val instanceof Date)) {
+      if (val.$regex) {
+        const flags = val.$options || "";
+        const r = new RegExp(val.$regex, flags);
+        if (!r.test(String(item[key] || ""))) return false;
+        continue;
+      }
+      if (val.$ne !== undefined) {
+        if (item[key] === val.$ne) return false;
+        continue;
+      }
       // Comparison operators
       if (val.$gte !== undefined) {
         const itemDate = new Date(item[key]).getTime();
@@ -105,6 +158,38 @@ export const setupMockMongoose = () => {
       return found ? { ...found } : null;
     });
 
+  User.find = (filter) =>
+    createQuery(() => {
+      return tables.users.filter((u) => matchFilter(u, filter)).map((u) => ({ ...u }));
+    });
+
+  User.countDocuments = async (filter = {}) => {
+    return tables.users.filter((u) => matchFilter(u, filter)).length;
+  };
+
+  User.updateOne = async (filter, update) => {
+    const item = tables.users.find((u) => matchFilter(u, filter));
+    if (item) {
+      const setFields = update.$set || update;
+      Object.assign(item, setFields);
+    }
+    return { acknowledged: true, modifiedCount: item ? 1 : 0 };
+  };
+
+  User.deleteOne = async (filter) => {
+    const idx = tables.users.findIndex((u) => matchFilter(u, filter));
+    if (idx !== -1) {
+      tables.users.splice(idx, 1);
+    }
+    return { acknowledged: true, deletedCount: idx !== -1 ? 1 : 0 };
+  };
+
+  User.deleteMany = async (filter) => {
+    const before = tables.users.length;
+    tables.users = tables.users.filter((u) => !matchFilter(u, filter));
+    return { acknowledged: true, deletedCount: before - tables.users.length };
+  };
+
   User.create = async (data) => {
     const email = data.email.toLowerCase().trim();
     if (tables.users.some((u) => u.email.toLowerCase() === email)) {
@@ -119,7 +204,10 @@ export const setupMockMongoose = () => {
       password_hash: data.password_hash,
       full_name: data.full_name,
       daily_max_hours: data.daily_max_hours !== undefined ? data.daily_max_hours : 4.0,
-      created_at: new Date(),
+      role: data.role || "user",
+      status: data.status || "active",
+      account_type: data.account_type || "student",
+      created_at: data.created_at || new Date(),
     };
     tables.users.push(record);
     return { ...record };
@@ -150,6 +238,16 @@ export const setupMockMongoose = () => {
     createQuery(() => {
       return tables.studyPlans.filter((p) => matchFilter(p, filter)).map((p) => ({ ...p }));
     });
+
+  StudyPlan.countDocuments = async (filter = {}) => {
+    return tables.studyPlans.filter((p) => matchFilter(p, filter)).length;
+  };
+
+  StudyPlan.deleteMany = async (filter) => {
+    const before = tables.studyPlans.length;
+    tables.studyPlans = tables.studyPlans.filter((p) => !matchFilter(p, filter));
+    return { deletedCount: before - tables.studyPlans.length };
+  };
 
   // 3. Topic
   Topic.create = async (data) => {
@@ -335,4 +433,30 @@ export const setupMockMongoose = () => {
       }
       return results.map((a) => ({ ...a }));
     });
+
+  QuizAttempt.countDocuments = async (filter = {}) => {
+    return tables.quizAttempts.filter((a) => matchFilter(a, filter)).length;
+  };
+
+  QuizAttempt.deleteMany = async (filter) => {
+    const before = tables.quizAttempts.length;
+    tables.quizAttempts = tables.quizAttempts.filter((a) => !matchFilter(a, filter));
+    return { deletedCount: before - tables.quizAttempts.length };
+  };
+
+  StudySession.countDocuments = async (filter = {}) => {
+    return tables.studySessions.filter((s) => matchFilter(s, filter)).length;
+  };
+
+  StudySession.deleteMany = async (filter) => {
+    const before = tables.studySessions.length;
+    tables.studySessions = tables.studySessions.filter((s) => !matchFilter(s, filter));
+    return { deletedCount: before - tables.studySessions.length };
+  };
+
+  FcmToken.deleteMany = async (filter) => {
+    const before = tables.fcmTokens.length;
+    tables.fcmTokens = tables.fcmTokens.filter((f) => !matchFilter(f, filter));
+    return { deletedCount: before - tables.fcmTokens.length };
+  };
 };

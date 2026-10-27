@@ -4,6 +4,7 @@ dotenv.config();
 import app from "./app.js";
 import { connectDB, disconnectDB } from "./config/database.js";
 import config from "./config/env.js";
+import { provisionDefaultAdmin } from "./services/adminService.js";
 
 const PORT = config.port;
 
@@ -11,7 +12,14 @@ let server;
 
 // Start Server and verify database connectivity
 const startServer = async () => {
-  await connectDB();
+  const isConnected = await connectDB();
+  if (isConnected) {
+    try {
+      await provisionDefaultAdmin();
+    } catch (adminErr) {
+      console.warn("ℹ️ Admin provisioning skipped or deferred:", adminErr.message);
+    }
+  }
 
   server = app.listen(PORT, () => {
     console.log(`=========================================`);

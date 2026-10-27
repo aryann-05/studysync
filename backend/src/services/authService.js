@@ -22,18 +22,24 @@ export const registerUser = async ({ full_name, email, password }) => {
   // Hash password with 12 salt rounds
   const password_hash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-  // Create user document
+  // Create user document with guaranteed "user" role
   const newUser = await User.create({
     full_name,
     email: normalizedEmail,
     password_hash,
     daily_max_hours: 4.0,
+    role: "user",
+    status: "active",
+    account_type: "student",
   });
 
   return {
     user_id: newUser.user_id,
     full_name: newUser.full_name,
     email: newUser.email,
+    role: newUser.role || "user",
+    status: newUser.status || "active",
+    account_type: newUser.account_type || "student",
     daily_max_hours: newUser.daily_max_hours,
     created_at: newUser.created_at,
   };
@@ -53,6 +59,14 @@ export const loginUser = async ({ email, password }) => {
     throw error;
   }
 
+  // Check account active status
+  if (user.status === "inactive") {
+    const error = new Error("Your account has been deactivated. Please contact an administrator.");
+    error.statusCode = 403;
+    error.code = "ACCOUNT_INACTIVE";
+    throw error;
+  }
+
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
   if (!isPasswordValid) {
     const error = new Error("Invalid email or password.");
@@ -65,6 +79,7 @@ export const loginUser = async ({ email, password }) => {
     user_id: user.user_id,
     email: user.email,
     full_name: user.full_name,
+    role: user.role || "user",
   };
 
   const accessToken = generateAccessToken(payload);
@@ -75,7 +90,11 @@ export const loginUser = async ({ email, password }) => {
       user_id: user.user_id,
       full_name: user.full_name,
       email: user.email,
+      role: user.role || "user",
+      status: user.status || "active",
+      account_type: user.account_type || "student",
       daily_max_hours: Number(user.daily_max_hours) || 4.0,
+      created_at: user.created_at,
     },
     access_token: accessToken,
     refresh_token: refreshToken,
@@ -111,10 +130,19 @@ export const refreshUserToken = async (refreshToken) => {
     throw error;
   }
 
+  // Check account status on refresh
+  if (user.status === "inactive") {
+    const error = new Error("Your account has been deactivated. Please contact an administrator.");
+    error.statusCode = 403;
+    error.code = "ACCOUNT_INACTIVE";
+    throw error;
+  }
+
   const payload = {
     user_id: user.user_id,
     email: user.email,
     full_name: user.full_name,
+    role: user.role || "user",
   };
 
   const newAccessToken = generateAccessToken(payload);
@@ -127,7 +155,11 @@ export const refreshUserToken = async (refreshToken) => {
       user_id: user.user_id,
       full_name: user.full_name,
       email: user.email,
+      role: user.role || "user",
+      status: user.status || "active",
+      account_type: user.account_type || "student",
       daily_max_hours: Number(user.daily_max_hours) || 4.0,
+      created_at: user.created_at,
     },
   };
 };
@@ -148,6 +180,9 @@ export const getCurrentUser = async (userId) => {
     user_id: user.user_id,
     full_name: user.full_name,
     email: user.email,
+    role: user.role || "user",
+    status: user.status || "active",
+    account_type: user.account_type || "student",
     daily_max_hours: Number(user.daily_max_hours) || 4.0,
     created_at: user.created_at,
   };

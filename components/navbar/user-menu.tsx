@@ -8,6 +8,7 @@ import {
   User,
   LayoutDashboard,
   Bell,
+  ShieldCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -49,6 +50,14 @@ export function UserMenu() {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {user.role === "admin" && (
+          <DropdownMenuItem asChild>
+            <Link href="/admin" className="cursor-pointer font-medium text-primary">
+              <ShieldCheck className="h-4 w-4" />
+              Admin Portal
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href="/dashboard" className="cursor-pointer">
             <LayoutDashboard className="h-4 w-4" />

@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap, Sparkles } from "lucide-react";
+import { GraduationCap, Sparkles, ShieldCheck } from "lucide-react";
 import { NAV_LINKS, SECONDARY_NAV, APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { useStudyContext } from "@/context/StudyContext";
+import { useAuth } from "@/hooks/useAuth";
 import { calculateCompletionPercent } from "@/lib/helpers";
 
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const { topics } = useStudyContext();
   const completion = calculateCompletionPercent(topics);
 
@@ -88,6 +90,18 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             );
           })}
+
+          {user?.role === "admin" && (
+            <div className="pt-3">
+              <Link
+                href="/admin"
+                className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
+              >
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Admin Portal
+              </Link>
+            </div>
+          )}
         </div>
       </nav>
 

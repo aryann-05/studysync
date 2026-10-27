@@ -2,6 +2,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  role?: "admin" | "user";
+  status?: "active" | "inactive";
+  accountType?: "student" | "regular";
   avatar?: string;
   examDate?: string;
   studyHoursPerDay: number;
@@ -9,6 +12,50 @@ export interface User {
   emailNotifications: boolean;
   reminderTime: string;
   createdAt: Date;
+}
+
+export interface AdminUser {
+  user_id: string;
+  full_name: string;
+  email: string;
+  role: "admin" | "user";
+  status: "active" | "inactive";
+  account_type: "student" | "regular";
+  daily_max_hours?: number;
+  created_at: string;
+}
+
+export interface AdminDashboardStats {
+  total_users: number;
+  total_students: number;
+  total_regular_users: number;
+  active_users: number;
+  inactive_users: number;
+  total_admins: number;
+  recent_registrations: AdminUser[];
+}
+
+export interface AdminUsersPagination {
+  total_users: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  has_next_page: boolean;
+  has_prev_page: boolean;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUser[];
+  pagination: AdminUsersPagination;
+}
+
+export interface AdminUserDetailResponse {
+  user: AdminUser;
+  stats: {
+    study_plans_count: number;
+    study_sessions_count: number;
+    quizzes_attempted_count: number;
+  };
 }
 
 export interface Topic {
@@ -151,6 +198,7 @@ export interface ApiResponse<T> {
 export interface LoginCredentials {
   email: string;
   password: string;
+  role?: "admin" | "user";
 }
 
 export interface RegisterCredentials {

@@ -51,6 +51,9 @@ export async function login(
       id: res.data?.user?.user_id || "user-1",
       name: res.data?.user?.full_name || "User",
       email: res.data?.user?.email || credentials.email,
+      role: (res.data?.user as any)?.role || "user",
+      status: (res.data?.user as any)?.status || "active",
+      accountType: (res.data?.user as any)?.account_type || "student",
       studyHoursPerDay: res.data?.user?.daily_max_hours || 4,
       theme: "light",
       emailNotifications: true,
@@ -77,15 +80,21 @@ export async function login(
       throw new Error("Invalid credentials. Please try again.");
     }
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY));
-    const mockToken = "mock-jwt-token-" + Date.now();
+    const isAdmin =
+      credentials.role === "admin" ||
+      (credentials.email && credentials.email.toLowerCase().includes("admin"));
+    const mockToken = "mock-jwt-token-" + (isAdmin ? "admin-" : "user-") + Date.now();
     setToken(mockToken);
     return {
       success: true,
       data: {
         user: {
-          id: "user-1",
-          name: "Alex Thompson",
-          email: credentials.email,
+          id: isAdmin ? "admin-1" : "user-1",
+          name: isAdmin ? "StudySync Admin" : "Alex Thompson",
+          email: credentials.email || (isAdmin ? "admin@studysync.com" : "alex.thompson@example.com"),
+          role: isAdmin ? "admin" : "user",
+          status: "active",
+          accountType: isAdmin ? "regular" : "student",
           studyHoursPerDay: 4,
           theme: "light",
           emailNotifications: true,
@@ -150,6 +159,9 @@ export async function register(
       id: res.data?.user_id || "user-1",
       name: credentials.name,
       email: credentials.email,
+      role: (res.data as any)?.role || "user",
+      status: (res.data as any)?.status || "active",
+      accountType: (res.data as any)?.account_type || "student",
       studyHoursPerDay: 4,
       theme: "light",
       emailNotifications: true,
@@ -180,6 +192,9 @@ export async function register(
           id: "user-1",
           name: credentials.name,
           email: credentials.email,
+          role: "user",
+          status: "active",
+          accountType: "student",
           studyHoursPerDay: 4,
           theme: "light",
           emailNotifications: true,
@@ -201,6 +216,9 @@ export async function getMe(): Promise<ApiResponse<User>> {
         user_id: string;
         full_name: string;
         email: string;
+        role?: "admin" | "user";
+        status?: "active" | "inactive";
+        account_type?: "student" | "regular";
         daily_max_hours: number;
         created_at?: string;
       };
@@ -212,6 +230,9 @@ export async function getMe(): Promise<ApiResponse<User>> {
         id: res.data.user_id,
         name: res.data.full_name,
         email: res.data.email,
+        role: res.data.role || "user",
+        status: res.data.status || "active",
+        accountType: res.data.account_type || "student",
         studyHoursPerDay: res.data.daily_max_hours ?? 4,
         theme: "light",
         emailNotifications: true,
@@ -241,6 +262,9 @@ export async function refreshSession(): Promise<ApiResponse<AuthResponse>> {
         user_id: string;
         full_name: string;
         email: string;
+        role?: "admin" | "user";
+        status?: "active" | "inactive";
+        account_type?: "student" | "regular";
         daily_max_hours: number;
         created_at?: string;
       };
@@ -260,6 +284,9 @@ export async function refreshSession(): Promise<ApiResponse<AuthResponse>> {
         id: user.user_id,
         name: user.full_name,
         email: user.email,
+        role: user.role || "user",
+        status: user.status || "active",
+        accountType: user.account_type || "student",
         studyHoursPerDay: user.daily_max_hours ?? 4,
         theme: "light",
         emailNotifications: true,

@@ -32,6 +32,24 @@ const userSchema = new mongoose.Schema(
       min: 0.5,
       max: 24.0,
     },
+    role: {
+      type: String,
+      enum: ["admin", "user"],
+      default: "user",
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ["active", "inactive"],
+      default: "active",
+      index: true,
+    },
+    account_type: {
+      type: String,
+      enum: ["student", "regular"],
+      default: "student",
+      index: true,
+    },
     created_at: {
       type: Date,
       default: Date.now,
