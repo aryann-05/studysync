@@ -37,6 +37,8 @@ export interface ExtractedSyllabusData extends ExtractedTopics {
       title: string;
       estimated_hours: number;
       difficulty_weight: number;
+      description?: string;
+      content_covered?: string[];
     }>;
   }>;
 }
@@ -162,6 +164,8 @@ export async function extractTopics(
           title: string;
           estimated_hours: number;
           difficulty_weight: number;
+          description?: string;
+          content_covered?: string[];
         }>;
       }>;
     };
@@ -190,7 +194,9 @@ export async function extractTopics(
         estimatedMinutes: Math.round((Number(t.estimated_hours) || 1.0) * 60),
         actualMinutes: 0,
         dueDate: "",
-        notes: `Estimated study time: ${t.estimated_hours} hrs. Difficulty weight: ${weight}.`,
+        description: t.description || "",
+        contentCovered: Array.isArray(t.content_covered) ? t.content_covered : [],
+        notes: t.description || `Estimated study time: ${t.estimated_hours} hrs. Difficulty weight: ${weight}.`,
       });
     }
   }

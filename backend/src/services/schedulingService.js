@@ -147,6 +147,8 @@ export const createPlanWithHierarchy = async (userId, planData, nlpModules) => {
         plan_id: plan.plan_id,
         parent_topic_id: parentTopic.topic_id,
         title: t.title,
+        description: t.description || "",
+        content_covered: Array.isArray(t.content_covered) ? t.content_covered : [],
         estimated_hours: Number(t.estimated_hours) || 1.0,
         difficulty_weight: Number(t.difficulty_weight) || 1.0,
         ease_factor: 2.5,

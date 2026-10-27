@@ -75,7 +75,7 @@ describe("Study Plan Generation API Endpoints", () => {
     expect(res.body.error.code).toBe("SCHEDULE_OVERLOAD");
   });
 
-  it("should extract topics and curriculum summary from uploaded file", async () => {
+  it("should extract topics and curriculum summary from uploaded file with descriptions and content covered", async () => {
     const res = await request(app)
       .post("/api/v1/plans/extract-topics")
       .set("Authorization", `Bearer ${authToken}`)
@@ -87,6 +87,14 @@ describe("Study Plan Generation API Endpoints", () => {
     expect(res.body.data).toHaveProperty("modules");
     expect(Array.isArray(res.body.data.modules)).toBe(true);
     expect(res.body.data.summary.total_modules).toBeGreaterThan(0);
+
+    const firstTopic = res.body.data.modules[0].topics[0];
+    expect(firstTopic).toHaveProperty("description");
+    expect(typeof firstTopic.description).toBe("string");
+    expect(firstTopic.description.length).toBeGreaterThan(0);
+    expect(firstTopic).toHaveProperty("content_covered");
+    expect(Array.isArray(firstTopic.content_covered)).toBe(true);
+    expect(firstTopic.content_covered.length).toBeGreaterThan(0);
   });
 
   it("should retrieve the active study plan and its sessions", async () => {

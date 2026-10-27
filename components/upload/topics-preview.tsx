@@ -58,10 +58,27 @@ export function TopicsPreview({
   onConfirm,
   isGenerating = false,
 }: TopicsPreviewProps) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(topics.map((t) => t.id))
   );
+
+  const toggleExpand = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const expandAll = () => setExpandedIds(new Set(topics.map((t) => t.id)));
+  const collapseAll = () => setExpandedIds(new Set());
+  const allExpanded = topics.length > 0 && expandedIds.size === topics.length;
 
   // Plan parameters
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
@@ -76,7 +93,8 @@ export function TopicsPreview({
   const [examDate, setExamDate] = useState(defaultExamStr);
   const [dailyMaxHours, setDailyMaxHours] = useState(3.5);
 
-  const toggleTopic = (id: string) => {
+  const toggleTopic = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -220,11 +238,26 @@ export function TopicsPreview({
 
       {/* 2. Interactive Topic Checklist & Validation */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-foreground">
-            Validate & Select Topics ({selectedTopics.length}/{topics.length} selected · {selectedEffort} hrs)
-          </h4>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">
+              Validate & Select Topics ({selectedTopics.length}/{topics.length} selected · {selectedEffort} hrs)
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Click any topic to inspect what it covers and what content is included.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={allExpanded ? collapseAll : expandAll}
+              className="h-7 text-xs gap-1 border-primary/25 text-primary hover:bg-primary/5"
+            >
+              <BookOpen className="h-3 w-3" />
+              {allExpanded ? "Collapse all details" : "Expand all details"}
+            </Button>
             <Button variant="ghost" size="sm" onClick={selectAll} className="h-7 text-xs">
               Select all
             </Button>
@@ -234,50 +267,179 @@ export function TopicsPreview({
           </div>
         </div>
 
-        <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-[460px] space-y-2.5 overflow-y-auto pr-1">
           {topics.map((topic) => (
             <div
               key={topic.id}
-              className="overflow-hidden rounded-lg border transition-colors hover:border-primary/30"
+              className={cn(
+                "overflow-hidden rounded-lg border transition-all duration-200",
+                selected.has(topic.id)
+                  ? "border-primary/30 bg-card shadow-xs"
+                  : "border-border/60 bg-muted/10 opacity-75",
+                expandedIds.has(topic.id) && "ring-1 ring-primary/20"
+              )}
             >
-              <button
-                type="button"
-                onClick={() => toggleTopic(topic.id)}
-                className="flex w-full items-center justify-between gap-3 p-3 text-left"
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(e) => toggleExpand(topic.id, e)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleExpand(topic.id);
+                  }
+                }}
+                className="flex w-full cursor-pointer items-start justify-between gap-3 p-3.5 text-left transition-colors hover:bg-muted/30"
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
+                <div className="flex min-w-0 items-start gap-3">
+                  {/* Select Checkbox Button */}
+                  <button
+                    type="button"
+                    aria-label={`Select ${topic.name}`}
+                    onClick={(e) => toggleTopic(topic.id, e)}
                     className={cn(
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors mt-0.5",
                       selected.has(topic.id)
-                        ? "border-primary bg-primary text-white"
-                        : "border-border"
+                        ? "border-primary bg-primary text-white shadow-xs"
+                        : "border-muted-foreground/40 bg-background hover:border-primary"
                     )}
                   >
-                    {selected.has(topic.id) && <Check className="h-3 w-3" />}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{topic.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {topic.subject} · {topic.estimatedMinutes} min
+                    {selected.has(topic.id) && <Check className="h-3.5 w-3.5" />}
+                  </button>
+
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-semibold text-foreground leading-snug">
+                      {topic.name}
                     </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/80">{topic.subject}</span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        {topic.estimatedMinutes >= 60
+                          ? `${Math.round((topic.estimatedMinutes / 60) * 10) / 10} hrs`
+                          : `${topic.estimatedMinutes} mins`}
+                      </span>
+                    </div>
+
+                    {/* Preview description snippet when collapsed */}
+                    {!expandedIds.has(topic.id) && (topic.description || topic.notes) && (
+                      <p className="line-clamp-1 text-xs text-muted-foreground/85 pt-0.5">
+                        {topic.description || topic.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant="outline" className="capitalize">
+
+                <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "capitalize text-[11px] font-medium px-2 py-0.5",
+                      topic.difficulty === "easy" &&
+                        "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5",
+                      topic.difficulty === "medium" &&
+                        "border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/5",
+                      topic.difficulty === "hard" &&
+                        "border-red-500/30 text-red-600 dark:text-red-400 bg-red-500/5"
+                    )}
+                  >
                     {topic.difficulty}
                   </Badge>
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 text-muted-foreground transition-transform",
-                      expanded === topic.id && "rotate-180"
-                    )}
-                  />
+                  <span className="text-muted-foreground hover:text-foreground p-0.5 transition-transform duration-200">
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 transition-transform duration-200",
+                        expandedIds.has(topic.id) && "rotate-180 text-primary"
+                      )}
+                    />
+                  </span>
                 </div>
-              </button>
-              {expanded === topic.id && (
-                <div className="border-t bg-muted/30 p-3 text-sm text-muted-foreground">
-                  {topic.notes ?? "No additional details extracted for this topic."}
+              </div>
+
+              {/* Expanded Details Panel: What this topic covers & What content is included */}
+              {expandedIds.has(topic.id) && (
+                <div className="border-t border-border/70 bg-muted/20 p-4 space-y-4 text-sm animate-in fade-in-50 duration-200">
+                  {/* 1. What this topic covers */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+                      <BookOpen className="h-3.5 w-3.5" />
+                      <span>What this topic covers</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed pl-5">
+                      {topic.description ||
+                        topic.notes ||
+                        "Covers core theoretical principles, foundational concepts, and functional mechanics for this curriculum topic."}
+                    </p>
+                  </div>
+
+                  {/* 2. What content is included */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-foreground/80">
+                      <ListChecks className="h-3.5 w-3.5 text-secondary" />
+                      <span>What content is included</span>
+                    </div>
+                    {topic.contentCovered && topic.contentCovered.length > 0 ? (
+                      <div className="pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {topic.contentCovered.map((item, cIdx) => (
+                          <div
+                            key={cIdx}
+                            className="flex items-start gap-2 rounded-md border border-border/50 bg-background/80 p-2 text-xs text-foreground/85"
+                          >
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold mt-0.5">
+                              ✓
+                            </span>
+                            <span className="leading-tight">{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="pl-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="flex items-start gap-2 rounded-md border border-border/50 bg-background/80 p-2 text-xs text-foreground/85">
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold mt-0.5">
+                            ✓
+                          </span>
+                          <span className="leading-tight">Foundational principles and theoretical definitions</span>
+                        </div>
+                        <div className="flex items-start gap-2 rounded-md border border-border/50 bg-background/80 p-2 text-xs text-foreground/85">
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold mt-0.5">
+                            ✓
+                          </span>
+                          <span className="leading-tight">Architectural designs, core methods, and workflows</span>
+                        </div>
+                        <div className="flex items-start gap-2 rounded-md border border-border/50 bg-background/80 p-2 text-xs text-foreground/85">
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold mt-0.5">
+                            ✓
+                          </span>
+                          <span className="leading-tight">Practical implementation examples and edge cases</span>
+                        </div>
+                        <div className="flex items-start gap-2 rounded-md border border-border/50 bg-background/80 p-2 text-xs text-foreground/85">
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold mt-0.5">
+                            ✓
+                          </span>
+                          <span className="leading-tight">Analysis, performance benchmarks, and exam review focus</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Topic Study Metadata Footer */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <span>
+                        Module: <strong className="text-foreground">{topic.subject}</strong>
+                      </span>
+                      <span>•</span>
+                      <span>
+                        Pacing: <strong className="text-foreground">{topic.estimatedMinutes} mins</strong> (~
+                        {Math.round((topic.estimatedMinutes / 60) * 10) / 10}h)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-primary text-xs">
+                      <Sparkles className="h-3 w-3" />
+                      <span>SM-2 Spaced Repetition Enabled</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

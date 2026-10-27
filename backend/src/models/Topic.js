@@ -24,6 +24,15 @@ const topicSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    content_covered: {
+      type: [String],
+      default: [],
+    },
     estimated_hours: {
       type: Number,
       default: 1.0,

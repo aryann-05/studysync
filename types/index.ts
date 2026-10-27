@@ -113,6 +113,8 @@ export interface Topic {
   completedDate?: string;
   color?: string;
   notes?: string;
+  description?: string;
+  contentCovered?: string[];
 }
 
 export interface StudySession {

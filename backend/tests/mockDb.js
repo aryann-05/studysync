@@ -259,6 +259,8 @@ export const setupMockMongoose = () => {
       plan_id: data.plan_id,
       parent_topic_id: data.parent_topic_id || null,
       title: data.title,
+      description: data.description || "",
+      content_covered: data.content_covered || [],
       estimated_hours: data.estimated_hours !== undefined ? data.estimated_hours : 1.0,
       difficulty_weight: data.difficulty_weight !== undefined ? data.difficulty_weight : 1.0,
       ease_factor: data.ease_factor !== undefined ? data.ease_factor : 2.5,
