@@ -49,5 +49,26 @@ router.patch("/users/:id/status", adminController.updateUserStatus);
  */
 router.delete("/users/:id", adminController.deleteUser);
 
+/**
+ * @route   GET /api/v1/admin/uploads
+ * @desc    Get all student and user uploads with user details
+ * @access  Admin Only
+ */
+router.get("/uploads", adminController.getUploads);
+
+/**
+ * @route   GET /api/v1/admin/uploads/:id
+ * @desc    Get details for a specific upload with user info
+ * @access  Admin Only
+ */
+router.get("/uploads/:id", adminController.getUploadById);
+
+/**
+ * @route   DELETE /api/v1/admin/uploads/:id
+ * @desc    Delete an uploaded file
+ * @access  Admin Only
+ */
+router.delete("/uploads/:id", adminController.deleteUpload);
+
 export default router;
 

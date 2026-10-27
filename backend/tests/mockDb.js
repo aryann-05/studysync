@@ -6,6 +6,7 @@ import StudySession from "../src/models/StudySession.js";
 import FcmToken from "../src/models/FcmToken.js";
 import Quiz from "../src/models/Quiz.js";
 import QuizAttempt from "../src/models/QuizAttempt.js";
+import Upload from "../src/models/Upload.js";
 
 /**
  * In-memory Mock Data Store for Mongoose Models
@@ -18,6 +19,7 @@ export const tables = {
   fcmTokens: [],
   quizzes: [],
   quizAttempts: [],
+  uploads: [],
 };
 
 export const resetMockDb = () => {
@@ -28,6 +30,7 @@ export const resetMockDb = () => {
   tables.fcmTokens = [];
   tables.quizzes = [];
   tables.quizAttempts = [];
+  tables.uploads = [];
 };
 
 // Helper to create a Mongoose query chain (thenable)
@@ -458,5 +461,50 @@ export const setupMockMongoose = () => {
     const before = tables.fcmTokens.length;
     tables.fcmTokens = tables.fcmTokens.filter((f) => !matchFilter(f, filter));
     return { deletedCount: before - tables.fcmTokens.length };
+  };
+
+  Upload.create = async (data) => {
+    const record = {
+      upload_id: data.upload_id || `file_${uuidv4().replace(/-/g, "").slice(0, 12)}`,
+      user_id: data.user_id,
+      original_name: data.original_name,
+      stored_name: data.stored_name,
+      file_path: data.file_path,
+      mime_type: data.mime_type,
+      size: data.size,
+      document_type: data.document_type || "document",
+      extracted_topics_count: data.extracted_topics_count || 0,
+      created_at: data.created_at || new Date(),
+    };
+    tables.uploads.push(record);
+    return { ...record };
+  };
+
+  Upload.find = (filter = {}) =>
+    createQuery((select, sort) => {
+      let results = tables.uploads.filter((u) => matchFilter(u, filter));
+      if (sort?.created_at === -1) {
+        results.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      }
+      return results.map((u) => ({ ...u }));
+    });
+
+  Upload.findOne = (filter = {}) =>
+    createQuery((select, sort) => {
+      const match = tables.uploads.find((u) => matchFilter(u, filter));
+      return match ? { ...match } : null;
+    });
+
+  Upload.findOneAndDelete = async (filter = {}) => {
+    const idx = tables.uploads.findIndex((u) => matchFilter(u, filter));
+    if (idx !== -1) {
+      const removed = tables.uploads.splice(idx, 1)[0];
+      return { ...removed };
+    }
+    return null;
+  };
+
+  Upload.countDocuments = async (filter = {}) => {
+    return tables.uploads.filter((u) => matchFilter(u, filter)).length;
   };
 };

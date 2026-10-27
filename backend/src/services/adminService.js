@@ -1,9 +1,13 @@
 import bcrypt from "bcrypt";
+import fs from "fs";
+import path from "path";
 import User from "../models/User.js";
 import StudyPlan from "../models/StudyPlan.js";
 import StudySession from "../models/StudySession.js";
 import QuizAttempt from "../models/QuizAttempt.js";
 import FcmToken from "../models/FcmToken.js";
+import Upload from "../models/Upload.js";
+import { UPLOAD_DIR } from "../middleware/uploadMiddleware.js";
 
 /**
  * Fetch high-level statistics for Admin Dashboard Overview
@@ -431,6 +435,246 @@ export const provisionDefaultAdmin = async () => {
   return adminUser;
 };
 
+/**
+ * Retrieve all user uploads with associated user details, search, filters & stats
+ */
+export const getUploads = async ({
+  page = 1,
+  limit = 10,
+  search = "",
+  file_type = "all",
+  user_id = "",
+} = {}) => {
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
+
+  // 1. Gather uploads from MongoDB
+  let allUploads = [];
+  try {
+    if (typeof Upload.find === "function") {
+      allUploads = await Upload.find({}).sort({ created_at: -1 });
+    }
+  } catch (err) {
+    allUploads = [];
+  }
+
+  // Also check registry file to merge any files uploaded in disk mode
+  try {
+    const registryPath = path.join(UPLOAD_DIR, "uploads_registry.json");
+    if (fs.existsSync(registryPath)) {
+      const data = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
+      const existingIds = new Set(allUploads.map((u) => u.upload_id || u.file_id));
+      for (const [id, rec] of Object.entries(data)) {
+        if (!existingIds.has(id)) {
+          allUploads.push({
+            upload_id: rec.file_id || id,
+            user_id: rec.user_id,
+            original_name: rec.original_name,
+            stored_name: rec.stored_name,
+            file_path: rec.file_path,
+            mime_type: rec.mime_type,
+            size: rec.size,
+            document_type: rec.document_type || (rec.mime_type === "application/pdf" ? "pdf" : "document"),
+            created_at: rec.uploaded_at ? new Date(rec.uploaded_at) : new Date(),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  // 2. Fetch all unique user IDs to populate user details
+  const userIds = [...new Set(allUploads.map((u) => u.user_id).filter(Boolean))];
+  const userMap = new Map();
+
+  try {
+    if (typeof User.find === "function" && userIds.length > 0) {
+      const users = await User.find({ user_id: { $in: userIds } });
+      for (const u of users) {
+        userMap.set(u.user_id, {
+          user_id: u.user_id,
+          full_name: u.full_name,
+          email: u.email,
+          role: u.role || "user",
+          account_type: u.account_type || "student",
+          status: u.status || "active",
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error populating upload users:", err.message);
+  }
+
+  // 3. Attach user details to each upload
+  let enriched = allUploads.map((u) => {
+    const userDetail = userMap.get(u.user_id) || {
+      user_id: u.user_id || "unknown",
+      full_name: "Student User",
+      email: "student@example.com",
+      role: "user",
+      account_type: "student",
+      status: "active",
+    };
+
+    return {
+      upload_id: u.upload_id || u.file_id,
+      original_name: u.original_name,
+      stored_name: u.stored_name,
+      mime_type: u.mime_type,
+      size: Number(u.size) || 0,
+      document_type: u.document_type || (u.original_name?.toLowerCase().endsWith(".pdf") ? "pdf" : "document"),
+      uploaded_at: u.created_at || new Date().toISOString(),
+      extracted_topics_count: u.extracted_topics_count || 0,
+      user: userDetail,
+    };
+  });
+
+  // 4. Calculate high-level stats BEFORE filtering
+  const totalUploads = enriched.length;
+  const totalSizeBytes = enriched.reduce((sum, item) => sum + (item.size || 0), 0);
+  const pdfCount = enriched.filter((item) => item.document_type === "pdf" || item.original_name?.toLowerCase().endsWith(".pdf")).length;
+  const docxTxtCount = enriched.filter((item) => ["docx", "txt", "document"].includes(item.document_type)).length;
+  const uniqueUsersCount = new Set(enriched.map((item) => item.user?.user_id)).size;
+
+  const stats = {
+    total_uploads: totalUploads,
+    total_size_bytes: totalSizeBytes,
+    pdf_count: pdfCount,
+    docx_txt_count: docxTxtCount,
+    unique_users_count: uniqueUsersCount,
+  };
+
+  // 5. Apply filters
+  if (user_id) {
+    enriched = enriched.filter((item) => item.user?.user_id === user_id);
+  }
+
+  if (file_type && file_type !== "all") {
+    enriched = enriched.filter((item) => item.document_type === file_type);
+  }
+
+  if (search && search.trim()) {
+    const q = search.trim().toLowerCase();
+    enriched = enriched.filter((item) => {
+      const fileNameMatch = item.original_name?.toLowerCase().includes(q);
+      const userNameMatch = item.user?.full_name?.toLowerCase().includes(q);
+      const userEmailMatch = item.user?.email?.toLowerCase().includes(q);
+      const userIdMatch = item.user?.user_id?.toLowerCase().includes(q);
+      return fileNameMatch || userNameMatch || userEmailMatch || userIdMatch;
+    });
+  }
+
+  // 6. Pagination
+  const filteredTotal = enriched.length;
+  const totalPages = Math.ceil(filteredTotal / limitNum) || 1;
+  const startIndex = (pageNum - 1) * limitNum;
+  const paginatedUploads = enriched.slice(startIndex, startIndex + limitNum);
+
+  return {
+    uploads: paginatedUploads,
+    stats,
+    pagination: {
+      total_uploads: filteredTotal,
+      page: pageNum,
+      limit: limitNum,
+      total_pages: totalPages,
+      has_next_page: pageNum < totalPages,
+      has_prev_page: pageNum > 1,
+    },
+  };
+};
+
+/**
+ * Retrieve single upload by ID
+ */
+export const getUploadById = async (uploadId) => {
+  let upload = null;
+  try {
+    if (typeof Upload.findOne === "function") {
+      upload = await Upload.findOne({ upload_id: uploadId });
+    }
+  } catch (err) {}
+
+  if (!upload) {
+    const registryPath = path.join(UPLOAD_DIR, "uploads_registry.json");
+    if (fs.existsSync(registryPath)) {
+      const data = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
+      upload = data[uploadId];
+    }
+  }
+
+  if (!upload) {
+    const error = new Error(`Uploaded file '${uploadId}' not found.`);
+    error.statusCode = 404;
+    error.code = "UPLOAD_NOT_FOUND";
+    throw error;
+  }
+
+  let userDetail = null;
+  if (upload.user_id) {
+    try {
+      userDetail = await User.findOne({ user_id: upload.user_id });
+    } catch (err) {}
+  }
+
+  return {
+    upload_id: upload.upload_id || upload.file_id,
+    original_name: upload.original_name,
+    stored_name: upload.stored_name,
+    file_path: upload.file_path,
+    mime_type: upload.mime_type,
+    size: upload.size,
+    document_type: upload.document_type || "pdf",
+    uploaded_at: upload.created_at || upload.uploaded_at,
+    user: userDetail ? {
+      user_id: userDetail.user_id,
+      full_name: userDetail.full_name,
+      email: userDetail.email,
+      role: userDetail.role || "user",
+      account_type: userDetail.account_type || "student",
+      status: userDetail.status || "active",
+      created_at: userDetail.created_at,
+    } : null,
+  };
+};
+
+/**
+ * Delete upload by ID
+ */
+export const deleteUpload = async (uploadId) => {
+  let filePath = null;
+
+  try {
+    if (typeof Upload.findOneAndDelete === "function") {
+      const doc = await Upload.findOneAndDelete({ upload_id: uploadId });
+      if (doc) filePath = doc.file_path;
+    }
+  } catch (err) {}
+
+  try {
+    const registryPath = path.join(UPLOAD_DIR, "uploads_registry.json");
+    if (fs.existsSync(registryPath)) {
+      const data = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
+      if (data[uploadId]) {
+        if (!filePath) filePath = data[uploadId].file_path;
+        delete data[uploadId];
+        fs.writeFileSync(registryPath, JSON.stringify(data, null, 2), "utf-8");
+      }
+    }
+  } catch (err) {}
+
+  if (filePath && fs.existsSync(filePath)) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (err) {
+      console.warn("Failed to delete physical file:", err.message);
+    }
+  }
+
+  return { upload_id: uploadId };
+};
+
 export default {
   getDashboardStats,
   getUsers,
@@ -439,5 +683,8 @@ export default {
   updateUserStatus,
   deleteUser,
   provisionDefaultAdmin,
+  getUploads,
+  getUploadById,
+  deleteUpload,
 };
 

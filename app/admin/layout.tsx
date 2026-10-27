@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  FileUp,
   ShieldCheck,
   LogOut,
   GraduationCap,
@@ -24,6 +25,7 @@ import { cn, getInitials } from "@/lib/utils";
 const ADMIN_NAV = [
   { label: "Overview", href: "/admin", icon: LayoutDashboard },
   { label: "Users Management", href: "/admin/users", icon: Users },
+  { label: "User Uploads", href: "/admin/uploads", icon: FileUp },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

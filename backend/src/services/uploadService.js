@@ -5,6 +5,8 @@ import { UPLOAD_DIR } from "../middleware/uploadMiddleware.js";
 
 const METADATA_FILE = path.join(UPLOAD_DIR, "uploads_registry.json");
 
+import Upload from "../models/Upload.js";
+
 // In-memory cache synced with metadata file
 let metadataStore = {};
 
@@ -36,6 +38,16 @@ loadRegistry();
 export const registerUploadedFile = async (file, userId) => {
   const file_id = `file_${uuidv4().replace(/-/g, "").slice(0, 12)}`;
 
+  let document_type = "document";
+  const lowerName = (file.originalname || "").toLowerCase();
+  if (file.mimetype === "application/pdf" || lowerName.endsWith(".pdf")) {
+    document_type = "pdf";
+  } else if (file.mimetype.includes("word") || lowerName.endsWith(".docx") || lowerName.endsWith(".doc")) {
+    document_type = "docx";
+  } else if (file.mimetype === "text/plain" || lowerName.endsWith(".txt")) {
+    document_type = "txt";
+  }
+
   const record = {
     file_id,
     user_id: userId,
@@ -44,16 +56,35 @@ export const registerUploadedFile = async (file, userId) => {
     file_path: file.path,
     mime_type: file.mimetype,
     size: file.size,
+    document_type,
     uploaded_at: new Date().toISOString(),
   };
 
   metadataStore[file_id] = record;
   saveRegistry();
 
+  try {
+    if (typeof Upload.create === "function") {
+      await Upload.create({
+        upload_id: file_id,
+        user_id: userId,
+        original_name: file.originalname,
+        stored_name: file.filename,
+        file_path: file.path,
+        mime_type: file.mimetype,
+        size: file.size,
+        document_type,
+      });
+    }
+  } catch (dbErr) {
+    console.warn("⚠️ Failed to persist upload record to MongoDB:", dbErr.message);
+  }
+
   return {
     file_id: record.file_id,
     original_name: record.original_name,
     size: record.size,
+    document_type,
   };
 };
 

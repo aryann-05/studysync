@@ -58,6 +58,48 @@ export interface AdminUserDetailResponse {
   };
 }
 
+export interface AdminUploadItem {
+  upload_id: string;
+  original_name: string;
+  stored_name?: string;
+  mime_type: string;
+  size: number;
+  document_type: "pdf" | "docx" | "txt" | "document";
+  uploaded_at: string;
+  extracted_topics_count?: number;
+  user: {
+    user_id: string;
+    full_name: string;
+    email: string;
+    role: "admin" | "user";
+    account_type: "student" | "regular";
+    status: "active" | "inactive";
+  };
+}
+
+export interface AdminUploadsStats {
+  total_uploads: number;
+  total_size_bytes: number;
+  pdf_count: number;
+  docx_txt_count: number;
+  unique_users_count: number;
+}
+
+export interface AdminUploadsPagination {
+  total_uploads: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  has_next_page: boolean;
+  has_prev_page: boolean;
+}
+
+export interface AdminUploadsResponse {
+  uploads: AdminUploadItem[];
+  stats: AdminUploadsStats;
+  pagination: AdminUploadsPagination;
+}
+
 export interface Topic {
   id: string;
   name: string;

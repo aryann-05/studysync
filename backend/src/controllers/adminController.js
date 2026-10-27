@@ -108,6 +108,57 @@ export const deleteUser = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/v1/admin/uploads
+ * Retrieve all student and user uploads with associated user details
+ */
+export const getUploads = async (req, res, next) => {
+  try {
+    const { page, limit, search, file_type, user_id } = req.query;
+    const result = await adminService.getUploads({
+      page,
+      limit,
+      search,
+      file_type,
+      user_id,
+    });
+
+    return sendSuccess(res, "Uploads retrieved successfully", result, 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/v1/admin/uploads/:id
+ * Retrieve details for a specific upload with user info
+ */
+export const getUploadById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await adminService.getUploadById(id);
+
+    return sendSuccess(res, "Upload details retrieved successfully", result, 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /api/v1/admin/uploads/:id
+ * Delete an uploaded file and remove its record
+ */
+export const deleteUpload = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await adminService.deleteUpload(id);
+
+    return sendSuccess(res, "Upload deleted successfully", result, 200);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getStats,
   getUsers,
@@ -115,5 +166,8 @@ export default {
   updateUser,
   updateUserStatus,
   deleteUser,
+  getUploads,
+  getUploadById,
+  deleteUpload,
 };
 
