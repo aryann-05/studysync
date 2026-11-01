@@ -172,7 +172,7 @@ export default function AdminUploadsPage() {
     }
     if (docType === "docx" || ext === "docx" || ext === "doc") {
       return (
-        <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-600 dark:text-blue-400 border border-blue-500/20">
+        <span className="inline-flex items-center gap-1 rounded bg-teal-500/10 px-2 py-0.5 text-xs font-semibold text-teal-600 dark:text-teal-400 border border-teal-500/20">
           DOCX
         </span>
       );
@@ -235,14 +235,14 @@ export default function AdminUploadsPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Uploading Students
               </p>
-              <h3 className="mt-1 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+              <h3 className="mt-1 text-2xl font-bold text-teal-600 dark:text-teal-400">
                 {stats.unique_users_count}
               </h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Unique active uploaders
               </p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
               <Users className="h-6 w-6" />
             </div>
           </CardContent>

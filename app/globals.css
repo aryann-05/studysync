@@ -3,56 +3,56 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
+  --background: #f2faf6;
+  --foreground: #0c2017;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #0c2017;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #2563eb;
+  --popover-foreground: #0c2017;
+  --primary: #059669;
   --primary-foreground: #ffffff;
-  --secondary: #4f46e5;
+  --secondary: #047857;
   --secondary-foreground: #ffffff;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted: #e6f6ee;
+  --muted-foreground: #475569;
   --accent: #10b981;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --warning: #f59e0b;
   --warning-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #2563eb;
+  --border: #d1fae5;
+  --input: #d1fae5;
+  --ring: #059669;
   --radius: 0.75rem;
-  --sidebar-bg: #f8fafc;
-  --sidebar-foreground: #0f172a;
+  --sidebar-bg: #f8fdfa;
+  --sidebar-foreground: #0c2017;
 }
 
 .dark {
-  --background: #020617;
-  --foreground: #e2e8f0;
-  --card: #0f172a;
-  --card-foreground: #e2e8f0;
-  --popover: #0f172a;
-  --popover-foreground: #e2e8f0;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #6366f1;
+  --background: #021a13;
+  --foreground: #ecfdf5;
+  --card: #08291f;
+  --card-foreground: #ecfdf5;
+  --popover: #08291f;
+  --popover-foreground: #ecfdf5;
+  --primary: #10b981;
+  --primary-foreground: #022016;
+  --secondary: #059669;
   --secondary-foreground: #ffffff;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #10b981;
-  --accent-foreground: #ffffff;
+  --muted: #10382b;
+  --muted-foreground: #a7f3d0;
+  --accent: #34d399;
+  --accent-foreground: #022016;
   --destructive: #f87171;
   --destructive-foreground: #ffffff;
   --warning: #fbbf24;
-  --warning-foreground: #0f172a;
-  --border: #1e293b;
-  --input: #1e293b;
-  --ring: #3b82f6;
-  --sidebar-bg: #0f172a;
-  --sidebar-foreground: #e2e8f0;
+  --warning-foreground: #022016;
+  --border: #134e3f;
+  --input: #134e3f;
+  --ring: #10b981;
+  --sidebar-bg: #041f17;
+  --sidebar-foreground: #ecfdf5;
 }
 
 @theme inline {
@@ -104,6 +104,11 @@
     background-color: var(--primary);
     color: var(--primary-foreground);
   }
+  /* Hide Microsoft Edge / IE native password reveal and clear buttons to prevent clash with custom eye icon */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
 }
 
 @layer utilities {
@@ -131,7 +136,7 @@
     border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   }
   .text-gradient {
-    background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #10b981 100%);
+    background: linear-gradient(135deg, #059669 0%, #047857 50%, #10b981 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;

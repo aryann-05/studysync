@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           {/* Logo */}
           <div className="flex h-16 items-center justify-between border-b px-6">
             <Link href="/admin" className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow">
                 <ShieldCheck className="h-5 w-5" />
               </span>
               <span className="text-base font-bold tracking-tight text-foreground">
@@ -107,7 +107,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className="border-t p-4">
             <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-2.5">
               <Avatar className="h-9 w-9 ring-1 ring-primary/20">
-                <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-bold">
+                <AvatarFallback className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white text-xs font-bold">
                   {getInitials(user?.name || "Admin")}
                 </AvatarFallback>
               </Avatar>

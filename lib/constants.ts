@@ -34,16 +34,16 @@ export const SECONDARY_NAV: { label: string; href: string; icon: LucideIcon }[] 
 ];
 
 export const BRAND_COLORS = {
-  primary: "#2563EB",
-  secondary: "#4F46E5",
+  primary: "#059669",
+  secondary: "#047857",
   accent: "#10B981",
   error: "#EF4444",
   warning: "#F59E0B",
 };
 
 export const TOPIC_COLORS = {
-  new: "#3B82F6",
-  revision: "#8B5CF6",
+  new: "#059669",
+  revision: "#0D9488",
   completed: "#10B981",
   missed: "#EF4444",
 };

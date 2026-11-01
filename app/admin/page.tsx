@@ -130,12 +130,12 @@ export default function AdminDashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Student Accounts
             </CardTitle>
-            <div className="rounded-lg bg-blue-500/10 p-2 text-blue-600 dark:text-blue-400">
+            <div className="rounded-lg bg-teal-500/10 p-2 text-teal-600 dark:text-teal-400">
               <GraduationCap className="h-4 w-4" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-blue-600 dark:text-blue-400">
+            <div className="text-3xl font-extrabold text-teal-600 dark:text-teal-400">
               {stats?.total_students ?? 0}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -170,7 +170,7 @@ export default function AdminDashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Active vs Inactive
             </CardTitle>
-            <div className="rounded-lg bg-indigo-500/10 p-2 text-indigo-600 dark:text-indigo-400">
+            <div className="rounded-lg bg-emerald-600/10 p-2 text-emerald-700 dark:text-emerald-300">
               <ShieldCheck className="h-4 w-4" />
             </div>
           </CardHeader>
@@ -249,7 +249,7 @@ export default function AdminDashboardPage() {
                           variant="secondary"
                           className={
                             u.account_type === "student"
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 capitalize text-xs"
+                              ? "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 capitalize text-xs"
                               : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 capitalize text-xs"
                           }
                         >

@@ -136,7 +136,7 @@ export function Hero() {
                       >
                         <span
                           className={`h-2 w-2 rounded-full ${
-                            i === 0 ? "bg-amber-500" : i === 1 ? "bg-blue-500" : "bg-violet-500"
+                            i === 0 ? "bg-amber-500" : i === 1 ? "bg-teal-500" : "bg-emerald-600"
                           }`}
                         />
                         <span className="text-xs font-medium">{task}</span>

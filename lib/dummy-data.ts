@@ -52,7 +52,7 @@ export const dummyTopics: Topic[] = [
     actualMinutes: 130,
     dueDate: "2025-05-12",
     completedDate: "2025-05-12",
-    color: "#3B82F6",
+    color: "#059669",
   },
   {
     id: "t3",
@@ -89,7 +89,7 @@ export const dummyTopics: Topic[] = [
     estimatedMinutes: 130,
     actualMinutes: 0,
     dueDate: "2025-05-18",
-    color: "#3B82F6",
+    color: "#059669",
   },
   {
     id: "t6",
@@ -139,7 +139,7 @@ export const dummyTopics: Topic[] = [
     estimatedMinutes: 120,
     actualMinutes: 0,
     dueDate: "2025-05-20",
-    color: "#3B82F6",
+    color: "#059669",
   },
   {
     id: "t10",
@@ -163,7 +163,7 @@ export const dummyTopics: Topic[] = [
     estimatedMinutes: 110,
     actualMinutes: 0,
     dueDate: "2025-05-22",
-    color: "#3B82F6",
+    color: "#059669",
   },
   {
     id: "t12",
@@ -313,7 +313,7 @@ export const dummyActivity: ActivityItem[] = [
     title: "New Topic Added: Electromagnetism",
     description: "Physics topic added to your study plan",
     timestamp: new Date(Date.now() - 86400000 * 4).toISOString(),
-    color: "#3B82F6",
+    color: "#059669",
   },
   {
     id: "a6",
@@ -421,12 +421,12 @@ export const dummyChartData: ChartData = {
   topicDistribution: [
     { name: "Completed", value: 27, color: "#10B981" },
     { name: "Studying", value: 5, color: "#F59E0B" },
-    { name: "New", value: 11, color: "#3B82F6" },
+    { name: "New", value: 11, color: "#059669" },
     { name: "Missed", value: 5, color: "#EF4444" },
   ],
   subjectHours: [
-    { subject: "Mathematics", hours: 28, color: "#2563EB" },
-    { subject: "Physics", hours: 22, color: "#4F46E5" },
+    { subject: "Mathematics", hours: 28, color: "#059669" },
+    { subject: "Physics", hours: 22, color: "#047857" },
     { subject: "Chemistry", hours: 18, color: "#10B981" },
     { subject: "Biology", hours: 12, color: "#F59E0B" },
   ],

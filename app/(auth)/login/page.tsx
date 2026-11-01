@@ -10,6 +10,8 @@ import {
   Lock,
   Loader2,
   LogIn,
+  Eye,
+  EyeOff,
   ShieldCheck,
   GraduationCap,
 } from "lucide-react";
@@ -28,6 +30,7 @@ export default function LoginPage() {
   const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Read role from query parameters if present (e.g. /login?role=admin)
   useEffect(() => {
@@ -265,13 +268,26 @@ export default function LoginPage() {
             <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="••••••••"
-              className="pl-10"
+              className="pl-10 pr-10"
               autoComplete="current-password"
               aria-invalid={!!errors.password}
               {...register("password")}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-hidden cursor-pointer p-1 rounded-sm transition-colors z-10"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
           </div>
           {errors.password && (
             <p className="text-xs text-destructive">{errors.password.message}</p>
