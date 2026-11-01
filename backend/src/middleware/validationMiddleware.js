@@ -1,5 +1,5 @@
 import { sendError } from "../utils/response.js";
-import { daysDifference } from "../utils/dateUtils.js";
+import { daysDifference, formatDateOnly, addDays } from "../utils/dateUtils.js";
 
 /**
  * Validate user registration payload
@@ -43,7 +43,7 @@ export const validateLogin = (req, res, next) => {
  * Validate study plan generation payload
  */
 export const validatePlanGeneration = (req, res, next) => {
-  const { course_name, file_id, modules, start_date, exam_date, daily_max_hours } = req.body;
+  const { course_name, file_id, modules, start_date, exam_date, daily_max_hours, duration_days } = req.body;
 
   if (!course_name || typeof course_name !== "string" || course_name.trim().length === 0) {
     return sendError(res, "course_name is required.", "VALIDATION_ERROR", 422);
@@ -54,17 +54,35 @@ export const validatePlanGeneration = (req, res, next) => {
   }
 
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!start_date || !dateRegex.test(start_date)) {
-    return sendError(res, "start_date is required in YYYY-MM-DD format.", "VALIDATION_ERROR", 422);
+  if (start_date && !dateRegex.test(start_date)) {
+    return sendError(res, "start_date must be in YYYY-MM-DD format.", "VALIDATION_ERROR", 422);
   }
 
-  if (!exam_date || !dateRegex.test(exam_date)) {
+  const effectiveStartDate = start_date || formatDateOnly(new Date());
+  req.body.start_date = effectiveStartDate;
+
+  if (duration_days !== undefined && duration_days !== null && duration_days !== "") {
+    const days = Number(duration_days);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      return sendError(res, "duration_days must be an integer between 1 and 365.", "VALIDATION_ERROR", 422);
+    }
+    req.body.duration_days = days;
+  }
+
+  if (req.body.duration_days && !exam_date) {
+    req.body.exam_date = formatDateOnly(addDays(effectiveStartDate, req.body.duration_days));
+  } else if (!req.body.duration_days && !exam_date) {
+    return sendError(res, "Either exam_date or duration_days must be provided.", "VALIDATION_ERROR", 422);
+  } else if (exam_date && !dateRegex.test(exam_date)) {
     return sendError(res, "exam_date is required in YYYY-MM-DD format.", "VALIDATION_ERROR", 422);
-  }
-
-  const daysDiff = daysDifference(start_date, exam_date);
-  if (daysDiff <= 0) {
-    return sendError(res, "exam_date must be strictly after start_date.", "VALIDATION_ERROR", 400);
+  } else if (exam_date) {
+    const daysDiff = daysDifference(effectiveStartDate, exam_date);
+    if (daysDiff <= 0) {
+      return sendError(res, "exam_date must be strictly after start_date.", "VALIDATION_ERROR", 400);
+    }
+    if (!req.body.duration_days) {
+      req.body.duration_days = daysDiff;
+    }
   }
 
   if (daily_max_hours !== undefined) {

@@ -40,6 +40,7 @@ export default function UploadPage() {
       courseName: string;
       startDate: string;
       examDate: string;
+      durationDays?: number;
       dailyMaxHours: number;
     }
   ) => {

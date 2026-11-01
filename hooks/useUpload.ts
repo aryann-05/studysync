@@ -116,6 +116,7 @@ export function useUpload(): UseUploadReturn {
       courseName?: string;
       startDate?: string;
       examDate?: string;
+      durationDays?: number;
       dailyMaxHours?: number;
       selectedTopics?: any[];
     }) => {
@@ -126,6 +127,7 @@ export function useUpload(): UseUploadReturn {
           courseName: details?.courseName || extractedTopics.fileName?.replace(/\.[^/.]+$/, "") || "Syllabus Course",
           startDate: details?.startDate,
           examDate: details?.examDate,
+          durationDays: details?.durationDays,
           dailyMaxHours: details?.dailyMaxHours,
           modules: extractedTopics.modules,
         });

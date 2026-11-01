@@ -20,6 +20,10 @@ export const extractTopics = async (req, res, next) => {
     }
 
     const fileRecord = getUploadedFile(file_id);
+    if (!fileRecord) {
+      return sendError(res, "Uploaded file not found or expired.", "NOT_FOUND", 404);
+    }
+
     const nlpData = await parseSyllabusDocument(fileRecord.file_path, fileRecord.original_name);
 
     return sendSuccess(res, "Topics and curriculum extracted successfully", {
@@ -29,6 +33,9 @@ export const extractTopics = async (req, res, next) => {
       modules: nlpData.modules,
     });
   } catch (error) {
+    if (error.statusCode) {
+      return sendError(res, error.message, error.code || "NLP_ERROR", error.statusCode, error.details);
+    }
     next(error);
   }
 };
@@ -97,7 +104,7 @@ export const getActivePlan = async (req, res, next) => {
 export const generatePlan = async (req, res, next) => {
   try {
     const userId = req.user.user_id;
-    const { course_name, file_id, modules, start_date, exam_date, daily_max_hours } = req.body;
+    const { course_name, file_id, modules, start_date, exam_date, daily_max_hours, duration_days } = req.body;
 
     const userDailyMax = daily_max_hours || Number(req.user.daily_max_hours) || 4.0;
 
@@ -105,13 +112,16 @@ export const generatePlan = async (req, res, next) => {
     if (!targetModules || !Array.isArray(targetModules) || targetModules.length === 0) {
       // 1. Retrieve file metadata
       const fileRecord = getUploadedFile(file_id);
+      if (!fileRecord) {
+        return sendError(res, "Uploaded file not found or expired.", "NOT_FOUND", 404);
+      }
 
-      // 2. Parse syllabus via Python NLP service (or intelligent fallback)
+      // 2. Parse syllabus via intelligent NLP extraction
       const nlpData = await parseSyllabusDocument(fileRecord.file_path, fileRecord.original_name);
       targetModules = nlpData.modules;
     }
 
-    // 3. Atomically generate plan, topics, and initial schedule
+    // 3. Atomically generate plan, topics, and initial schedule across requested duration
     const result = await createPlanWithHierarchy(
       userId,
       {
@@ -119,6 +129,7 @@ export const generatePlan = async (req, res, next) => {
         start_date,
         exam_date,
         daily_max_hours: userDailyMax,
+        duration_days,
       },
       targetModules
     );
@@ -129,8 +140,9 @@ export const generatePlan = async (req, res, next) => {
       {
         plan_id: result.plan.plan_id,
         course_name: result.plan.course_name,
-        start_date,
-        exam_date,
+        start_date: formatDateOnly(result.plan.start_date),
+        exam_date: formatDateOnly(result.plan.exam_date),
+        duration_days: result.totalDays,
         daily_max_hours: userDailyMax,
         total_topics: result.totalTopics,
         total_hours: result.totalEffort,
@@ -140,6 +152,9 @@ export const generatePlan = async (req, res, next) => {
       201
     );
   } catch (error) {
+    if (error.statusCode) {
+      return sendError(res, error.message, error.code || "PLAN_GENERATION_ERROR", error.statusCode, error.details);
+    }
     next(error);
   }
 };

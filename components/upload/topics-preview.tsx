@@ -44,6 +44,7 @@ interface TopicsPreviewProps {
       courseName: string;
       startDate: string;
       examDate: string;
+      durationDays?: number;
       dailyMaxHours: number;
     }
   ) => void;
@@ -80,18 +81,60 @@ export function TopicsPreview({
   const collapseAll = () => setExpandedIds(new Set());
   const allExpanded = topics.length > 0 && expandedIds.size === topics.length;
 
-  // Plan parameters
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const defaultExamStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 45);
-    return d.toISOString().split("T")[0];
+  // Plan parameters & date helpers
+  const addDaysToDateStr = (dateStr: string, days: number): string => {
+    try {
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+      date.setUTCDate(date.getUTCDate() + days);
+      const ry = date.getUTCFullYear();
+      const rm = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const rd = String(date.getUTCDate()).padStart(2, "0");
+      return `${ry}-${rm}-${rd}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const ry = now.getFullYear();
+    const rm = String(now.getMonth() + 1).padStart(2, "0");
+    const rd = String(now.getDate()).padStart(2, "0");
+    return `${ry}-${rm}-${rd}`;
   }, []);
 
   const [courseName, setCourseName] = useState(initialCourseName);
   const [startDate, setStartDate] = useState(todayStr);
-  const [examDate, setExamDate] = useState(defaultExamStr);
+  const [durationDays, setDurationDays] = useState<number>(15);
+  const [examDate, setExamDate] = useState(() => addDaysToDateStr(todayStr, 15));
   const [dailyMaxHours, setDailyMaxHours] = useState(3.5);
+
+  const handleDurationPreset = (days: number) => {
+    setDurationDays(days);
+    setExamDate(addDaysToDateStr(startDate, days));
+  };
+
+  const handleDurationChange = (days: number) => {
+    const validDays = Math.max(1, Math.min(365, days || 1));
+    setDurationDays(validDays);
+    setExamDate(addDaysToDateStr(startDate, validDays));
+  };
+
+  const handleStartDateChange = (newStartDate: string) => {
+    setStartDate(newStartDate);
+    if (newStartDate && durationDays > 0) {
+      setExamDate(addDaysToDateStr(newStartDate, durationDays));
+    }
+  };
+
+  const handleExamDateChange = (newExamDate: string) => {
+    setExamDate(newExamDate);
+    if (startDate && newExamDate) {
+      const diff = Math.max(1, Math.round((new Date(newExamDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
+      setDurationDays(diff);
+    }
+  };
 
   const toggleTopic = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -122,10 +165,11 @@ export function TopicsPreview({
   }, [selectedTopics]);
 
   const availableDays = useMemo(() => {
+    if (durationDays > 0) return durationDays;
     if (!startDate || !examDate) return 0;
     const diff = new Date(examDate).getTime() - new Date(startDate).getTime();
     return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
-  }, [startDate, examDate]);
+  }, [startDate, examDate, durationDays]);
 
   const totalCapacity = useMemo(() => {
     return Math.round(availableDays * dailyMaxHours * 10) / 10;
@@ -450,6 +494,61 @@ export function TopicsPreview({
       {/* 3. Study Plan Parameters */}
       <div className="space-y-4 rounded-xl border p-4 bg-card">
         <h4 className="font-semibold text-sm">Study Plan Parameters</h4>
+
+        {/* Study Duration Presets & Custom Days Selector */}
+        <div className="rounded-lg border border-primary/20 bg-primary/[0.02] p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
+              <span>Target Study Duration ({durationDays} Days)</span>
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              Dynamic multi-phase schedule
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={durationDays === 7 ? "default" : "outline"}
+              onClick={() => handleDurationPreset(7)}
+              className="h-8 text-xs font-medium"
+            >
+              7 Days Plan
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={durationDays === 15 ? "default" : "outline"}
+              onClick={() => handleDurationPreset(15)}
+              className="h-8 text-xs font-medium"
+            >
+              15 Days Plan
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={durationDays === 30 ? "default" : "outline"}
+              onClick={() => handleDurationPreset(30)}
+              className="h-8 text-xs font-medium"
+            >
+              30 Days Plan
+            </Button>
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-xs text-muted-foreground font-medium">Custom:</span>
+              <Input
+                type="number"
+                min="1"
+                max="365"
+                value={durationDays}
+                onChange={(e) => handleDurationChange(Number(e.target.value))}
+                className="h-8 w-20 text-xs text-center"
+              />
+              <span className="text-xs text-muted-foreground">days</span>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label htmlFor="courseName" className="text-xs">Course Name</Label>
@@ -478,7 +577,7 @@ export function TopicsPreview({
               id="startDate"
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => handleStartDateChange(e.target.value)}
             />
           </div>
           <div className="space-y-1">
@@ -487,7 +586,7 @@ export function TopicsPreview({
               id="examDate"
               type="date"
               value={examDate}
-              onChange={(e) => setExamDate(e.target.value)}
+              onChange={(e) => handleExamDateChange(e.target.value)}
             />
           </div>
         </div>
@@ -529,6 +628,7 @@ export function TopicsPreview({
               courseName,
               startDate,
               examDate,
+              durationDays,
               dailyMaxHours,
             })
           }

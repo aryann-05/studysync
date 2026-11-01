@@ -227,6 +227,7 @@ export async function confirmTopics(
     fileId?: string;
     startDate?: string;
     examDate?: string;
+    durationDays?: number;
     dailyMaxHours?: number;
     modules?: any[];
   }
@@ -242,6 +243,7 @@ export async function confirmTopics(
     modules: planDetails?.modules,
     start_date: planDetails?.startDate || today,
     exam_date: planDetails?.examDate || defaultExam,
+    duration_days: planDetails?.durationDays,
     daily_max_hours: planDetails?.dailyMaxHours || 3.5,
   };
 

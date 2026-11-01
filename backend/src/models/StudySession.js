@@ -30,7 +30,7 @@ const studySessionSchema = new mongoose.Schema(
     },
     session_type: {
       type: String,
-      enum: ["INITIAL", "REVIEW", "REMEDIAL"],
+      enum: ["INITIAL", "REVIEW", "REMEDIAL", "PRACTICE", "ASSESSMENT"],
       default: "INITIAL",
     },
     is_completed: {

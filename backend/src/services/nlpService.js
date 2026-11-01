@@ -6,37 +6,122 @@ import FormData from "form-data";
 import config from "../config/env.js";
 
 const require = createRequire(import.meta.url);
-let pdfParse;
+
+let pdfParseModule = null;
 try {
-  pdfParse = require("pdf-parse");
+  pdfParseModule = require("pdf-parse");
 } catch {
-  pdfParse = null;
+  pdfParseModule = null;
 }
 
+let mammothModule = null;
+try {
+  mammothModule = require("mammoth");
+} catch {
+  mammothModule = null;
+}
+
+let tesseractModule = null;
+try {
+  tesseractModule = require("tesseract.js");
+} catch {
+  tesseractModule = null;
+}
 
 /**
- * Extract raw text from file (PDF, TXT, or fallback)
+ * Clean extracted text before sending it to NLP or parsing
+ */
+export const cleanSyllabusText = (rawText) => {
+  if (!rawText || typeof rawText !== "string") return "";
+  return rawText
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+    // Remove standalone page headers/footers
+    .replace(/^[ \t]*(?:Page \d+(?: of \d+)?|--- Page \d+ ---|\d+ of \d+)[ \t]*$/gmi, "")
+    // Remove lines that are just long horizontal separators
+    .replace(/^[ \t]*[-=_*~]{4,}[ \t]*$/gm, "")
+    // Replace multiple empty lines with a single empty line
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
+/**
+ * Extract raw text from file (PDF, DOCX, TXT, with OCR fallback for scanned PDFs)
  */
 export const extractRawTextFromFile = async (filePath, originalName) => {
   if (!filePath || !fs.existsSync(filePath)) {
     return "";
   }
 
-  const ext = path.extname(originalName).toLowerCase();
+  const ext = path.extname(originalName || filePath).toLowerCase();
+  let extractedText = "";
 
   try {
     if (ext === ".pdf") {
       const dataBuffer = fs.readFileSync(filePath);
-      const pdfData = await pdfParse(dataBuffer);
-      return pdfData.text || "";
+
+      // Support pdf-parse v2 (PDFParse class) and v1 (function)
+      if (pdfParseModule) {
+        if (typeof pdfParseModule.PDFParse === "function") {
+          const parser = new pdfParseModule.PDFParse({ data: dataBuffer });
+          const res = await parser.getText();
+          extractedText = res?.text || "";
+        } else if (typeof pdfParseModule === "function") {
+          const res = await pdfParseModule(dataBuffer);
+          extractedText = res?.text || "";
+        }
+      }
+
+      // If text extraction yielded insufficient text, check for scanned images in PDF
+      if ((!extractedText || extractedText.trim().length < 30) && pdfParseModule) {
+        console.warn(`[NLP] PDF ${originalName} text layer empty or sparse (<30 chars). Checking for scanned images...`);
+        try {
+          if (typeof pdfParseModule.PDFParse === "function" && tesseractModule) {
+            const imgParser = new pdfParseModule.PDFParse({ data: dataBuffer });
+            if (typeof imgParser.getImage === "function") {
+              const imgResult = await imgParser.getImage({ imageBuffer: true });
+              if (imgResult && Array.isArray(imgResult.pages) && imgResult.pages.length > 0) {
+                const ocrChunks = [];
+                for (const page of imgResult.pages.slice(0, 5)) {
+                  for (const img of (page.images || []).slice(0, 3)) {
+                    if (img.data && tesseractModule.recognize) {
+                      const ocr = await tesseractModule.recognize(Buffer.from(img.data), "eng");
+                      if (ocr?.data?.text && ocr.data.text.trim().length > 10) {
+                        ocrChunks.push(ocr.data.text.trim());
+                      }
+                    }
+                  }
+                }
+                if (ocrChunks.length > 0) {
+                  extractedText = ocrChunks.join("\n\n");
+                  console.log(`[NLP] OCR successfully extracted ${extractedText.length} characters from scanned PDF.`);
+                }
+              }
+            }
+          }
+        } catch (ocrErr) {
+          console.warn(`[NLP] OCR fallback attempt failed for ${originalName}:`, ocrErr.message);
+        }
+      }
+    } else if (ext === ".docx" || ext === ".doc") {
+      if (mammothModule && typeof mammothModule.extractRawText === "function") {
+        const docxRes = await mammothModule.extractRawText({ path: filePath });
+        extractedText = docxRes?.value || "";
+      } else {
+        // Fallback for docx xml reading if mammoth is unavailable
+        extractedText = fs.readFileSync(filePath, "utf-8");
+      }
     } else {
       // TXT or other text-based files
-      return fs.readFileSync(filePath, "utf-8");
+      extractedText = fs.readFileSync(filePath, "utf-8");
     }
   } catch (err) {
-    console.warn(`Error extracting text from ${originalName}:`, err.message);
-    return "";
+    console.warn(`[NLP] Error extracting text from ${originalName}:`, err.message);
+    extractedText = "";
   }
+
+  return cleanSyllabusText(extractedText);
 };
 
 /**
@@ -340,95 +425,347 @@ export const buildTopicExplanation = (topicTitle, moduleName = "", rawDetails = 
 };
 
 /**
- * Intelligent syllabus parser and summarizer that extracts module and topic hierarchies
+ * Extract syllabus topics via LLM API if configured
  */
-export const parseAndSummarizeText = (rawText, originalName) => {
-  const baseTitle = originalName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-
-  if (!rawText || rawText.trim().length < 30) {
-    return generateFallbackHierarchy(null, originalName);
+export const extractTopicsViaLLM = async (rawText, baseTitle) => {
+  if (process.env.NODE_ENV === "test") {
+    return null;
   }
 
-  const lines = rawText
+  const geminiKey = config.ai.geminiApiKey?.trim();
+  const openaiKey = config.ai.openaiApiKey?.trim();
+
+  if (!geminiKey && !openaiKey) {
+    return null;
+  }
+
+  const prompt = `You are an expert academic curriculum parser.
+Analyze the following uploaded syllabus text for the course "${baseTitle}".
+Extract ALL genuine units/modules, topics, and subtopics directly from the document text.
+
+STRICT INSTRUCTIONS:
+1. Extract topics directly from the syllabus content. DO NOT invent topics that are not present.
+2. DO NOT use generic topics like "Fundamentals", "Core Concepts", "Introduction", "Advanced Topics", or "Important Concepts" unless literally written as headings in the text.
+3. Preserve the original unit names, numbers, and topic titles as closely as possible.
+4. Extract subtopics into the "content_covered" array for each topic.
+5. Assign realistic study hours (between 1.5 and 3.5) and difficulty weights (1.0 for foundational, 1.2 for intermediate, 1.3-1.4 for advanced).
+6. Return ONLY valid JSON (no markdown formatting, no code blocks) matching this exact JSON schema:
+{
+  "course_name": "${baseTitle}",
+  "modules": [
+    {
+      "module_name": "Unit 1: <Name>",
+      "topics": [
+        {
+          "title": "<Exact Topic Name>",
+          "description": "<Clear 1-2 sentence explanation of what this topic covers>",
+          "content_covered": ["<Subtopic 1>", "<Subtopic 2>", "<Subtopic 3>"],
+          "estimated_hours": 2.0,
+          "difficulty_weight": 1.15
+        }
+      ]
+    }
+  ]
+}
+
+Syllabus Content:
+${rawText.slice(0, 8000)}`;
+
+  // 1. Try Google Gemini if configured
+  if (geminiKey) {
+    try {
+      const model = config.ai.geminiModel || "gemini-3.5-flash";
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+      const response = await axios.post(
+        endpoint,
+        {
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 2500,
+            responseMimeType: "application/json",
+          },
+        },
+        { headers: { "Content-Type": "application/json" }, timeout: 12000 }
+      );
+
+      const candidateText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (candidateText) {
+        const cleaned = candidateText.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed && Array.isArray(parsed.modules) && parsed.modules.length > 0) {
+          const totalTopics = parsed.modules.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
+          if (totalTopics >= 2) {
+            console.log(`[NLP] Successfully extracted ${totalTopics} topics across ${parsed.modules.length} modules via Gemini AI.`);
+            return parsed;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[NLP] Gemini LLM extraction failed or timed out:", err.message);
+    }
+  }
+
+  // 2. Try OpenAI if configured
+  if (openaiKey) {
+    try {
+      const endpoint = (config.ai.openaiBaseUrl || "https://api.openai.com/v1") + "/chat/completions";
+      const response = await axios.post(
+        endpoint,
+        {
+          model: config.ai.openaiModel || "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You extract syllabus structures into structured JSON." },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.2,
+          response_format: { type: "json_object" },
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiKey}`,
+          },
+          timeout: 12000,
+        }
+      );
+
+      const text = response.data?.choices?.[0]?.message?.content;
+      if (text) {
+        const parsed = JSON.parse(text);
+        if (parsed && Array.isArray(parsed.modules) && parsed.modules.length > 0) {
+          const totalTopics = parsed.modules.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
+          if (totalTopics >= 2) {
+            console.log(`[NLP] Successfully extracted ${totalTopics} topics across ${parsed.modules.length} modules via OpenAI.`);
+            return parsed;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[NLP] OpenAI LLM extraction failed or timed out:", err.message);
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Filter noise lines such as textbooks, credits, and evaluation schemes
+ */
+const isNoiseLine = (line) => {
+  const lower = line.toLowerCase().trim();
+  return (
+    lower.startsWith("textbook") ||
+    lower.startsWith("text book") ||
+    lower.startsWith("reference book") ||
+    lower.startsWith("references") ||
+    lower.startsWith("course outcome") ||
+    lower.startsWith("course objective") ||
+    lower.startsWith("prerequisite") ||
+    lower.startsWith("evaluation scheme") ||
+    lower.startsWith("internal assessment") ||
+    lower.startsWith("end semester") ||
+    lower.startsWith("credits:") ||
+    lower.startsWith("lecture hours") ||
+    lower.startsWith("marks:") ||
+    lower.startsWith("total marks") ||
+    lower.startsWith("paper pattern") ||
+    lower.startsWith("scheme of examination") ||
+    lower.startsWith("duration of exam")
+  );
+};
+
+/**
+ * Intelligent deterministic syllabus parser and summarizer
+ */
+export const parseAndSummarizeText = async (rawText, originalName) => {
+  const baseTitle = originalName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+  const cleanedText = cleanSyllabusText(rawText);
+
+  if (!cleanedText || cleanedText.length < 25) {
+    const error = new Error(
+      "The uploaded document contains insufficient readable text (empty, unreadable, or scanned image without text layer). Please upload a valid syllabus document with text."
+    );
+    error.statusCode = 422;
+    error.code = "INSUFFICIENT_SYLLABUS_TEXT";
+    throw error;
+  }
+
+  // 1. Attempt LLM-assisted syllabus extraction if API key is available
+  try {
+    const llmParsed = await extractTopicsViaLLM(cleanedText, baseTitle);
+    if (llmParsed && Array.isArray(llmParsed.modules) && llmParsed.modules.length > 0) {
+      const totalTopics = llmParsed.modules.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
+      if (totalTopics >= 2) {
+        // Calculate metrics
+        const totalHours = llmParsed.modules.reduce(
+          (sum, m) =>
+            sum + (m.topics || []).reduce((tSum, t) => tSum + (Number(t.estimated_hours) || 2.0) * (Number(t.difficulty_weight) || 1.1), 0),
+          0
+        );
+        const avgDifficulty =
+          llmParsed.modules.reduce(
+            (sum, m) => sum + (m.topics || []).reduce((tSum, t) => tSum + (Number(t.difficulty_weight) || 1.1), 0),
+            0
+          ) / totalTopics;
+
+        const easyCount = llmParsed.modules.flatMap((m) => m.topics || []).filter((t) => (t.difficulty_weight || 1.1) <= 1.05).length;
+        const hardCount = llmParsed.modules.flatMap((m) => m.topics || []).filter((t) => (t.difficulty_weight || 1.1) >= 1.25).length;
+        const mediumCount = Math.max(0, totalTopics - easyCount - hardCount);
+
+        const summaryPoints = [
+          `Curriculum Structure: Extracted ${llmParsed.modules.length} syllabus modules covering ${totalTopics} specific topics.`,
+          `Workload Estimate: Total required effort estimated at ~${Math.round(totalHours * 10) / 10} study hours (average difficulty: ${(Math.round(avgDifficulty * 100) / 100).toFixed(2)}x).`,
+          `Core Focus Areas: Spans ${llmParsed.modules.slice(0, 3).map((m) => `"${m.module_name.replace(/^(module|unit|chapter)\s*\d*[:\s\-]*/i, "").trim()}"`).join(", ")}${llmParsed.modules.length > 3 ? `, plus ${llmParsed.modules.length - 3} more modules` : ""}.`,
+          `Complexity Distribution: Comprises ${easyCount} foundational, ${mediumCount} intermediate, and ${hardCount} advanced topics.`,
+          `Adaptive Pacing: Sessions dynamically distributed across your chosen timeline with balanced daily study load and pre-exam assessments.`,
+        ];
+
+        return {
+          course_name: llmParsed.course_name || baseTitle,
+          summary: {
+            total_modules: llmParsed.modules.length,
+            total_topics: totalTopics,
+            total_estimated_hours: Math.round(totalHours * 10) / 10,
+            average_difficulty: Math.round(avgDifficulty * 100) / 100,
+            overview: `Extracted syllabus curriculum for "${baseTitle}". Spans ${llmParsed.modules.length} units covering ${totalTopics} genuine topics directly from the document.`,
+            summary_points: summaryPoints,
+            difficulty_breakdown: {
+              easy: easyCount,
+              medium: mediumCount,
+              hard: hardCount,
+            },
+          },
+          modules: llmParsed.modules,
+        };
+      }
+    }
+  } catch (llmErr) {
+    console.warn("[NLP] LLM extraction pass skipped or errored:", llmErr.message);
+  }
+
+  // 2. High-Precision Deterministic Syllabus Parser
+  const lines = cleanedText
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .filter((l) => l.length > 2);
+    .filter((l) => l.length > 1 && !isNoiseLine(l));
 
   const modules = [];
   let currentModule = null;
 
   // Patterns indicating a module or unit header
-  const moduleRegex = /^(module|unit|chapter|part|section)\s*([0-9ivx]+)?[:\s\-–—]*(.*)/i;
-  const uppercaseHeaderRegex = /^[A-Z0-9\s,:–—\-]{4,60}$/;
+  const moduleRegex = /^(?:module|unit|chapter|part|section)\s*([0-9ivx]+|[a-z])?[:\s\-–—\.]*(.*)/i;
+  const numberedHeaderRegex = /^([0-9]+|[IVX]+)\.\s+([A-Z][A-Za-z0-9\s,\-–—/&]{3,80})$/;
+  const uppercaseHeaderRegex = /^[A-Z0-9\s,:–—\-/&]{4,65}$/;
+
+  const addTopicToCurrentModule = (cleanTopic, subtopics = []) => {
+    if (!cleanTopic || cleanTopic.length < 3 || cleanTopic.length > 120) return;
+    if (isNoiseLine(cleanTopic)) return;
+
+    if (!currentModule) {
+      currentModule = {
+        module_name: `Unit 1: ${baseTitle}`,
+        topics: [],
+      };
+    }
+
+    // Avoid duplicate topics in the same module
+    if (!currentModule.topics.some((t) => t.title.toLowerCase() === cleanTopic.toLowerCase())) {
+      const lower = cleanTopic.toLowerCase();
+      let difficulty = 1.15;
+      let hours = 2.0;
+
+      if (lower.includes("advanced") || lower.includes("algorithm") || lower.includes("design") || lower.includes("analysis") || lower.includes("optimization") || lower.includes("concurrency") || lower.includes("security")) {
+        difficulty = 1.3;
+        hours = 2.5;
+      } else if (lower.includes("introduction") || lower.includes("overview") || lower.includes("basics") || lower.includes("concept") || lower.includes("definition") || lower.includes("model")) {
+        difficulty = 1.0;
+        hours = 1.5;
+      } else if (lower.includes("implementation") || lower.includes("practical") || lower.includes("system") || lower.includes("queries") || lower.includes("routing") || lower.includes("regression")) {
+        difficulty = 1.2;
+        hours = 2.0;
+      }
+
+      const explanation = buildTopicExplanation(cleanTopic, currentModule.module_name, subtopics);
+
+      currentModule.topics.push({
+        title: cleanTopic,
+        description: explanation.description,
+        content_covered: explanation.content_covered,
+        estimated_hours: hours,
+        difficulty_weight: difficulty,
+      });
+    }
+  };
 
   for (const line of lines) {
     const isModuleMatch = moduleRegex.test(line);
-    const isUpperMatch = uppercaseHeaderRegex.test(line) && line.split(" ").length <= 8;
+    const isNumberedMatch = numberedHeaderRegex.test(line) && line.split(" ").length <= 8;
+    const isUpperMatch = uppercaseHeaderRegex.test(line) && line.split(" ").length <= 7 && !line.includes(",") && !line.includes(":");
 
-    if (isModuleMatch || (isUpperMatch && !currentModule)) {
+    if (isModuleMatch || isNumberedMatch || (isUpperMatch && (!currentModule || currentModule.topics.length >= 2))) {
       if (currentModule && currentModule.topics.length > 0) {
         modules.push(currentModule);
       }
+
+      let modTitle = line;
+      if (isModuleMatch) {
+        const m = line.match(moduleRegex);
+        const unitNum = m[1] ? m[1].toUpperCase() : `${modules.length + 1}`;
+        const unitName = m[2] ? m[2].trim() : line;
+        modTitle = `Unit ${unitNum}: ${unitName.replace(/^[–—:\-\.]+\s*/, "")}`;
+      }
+
       currentModule = {
-        module_name: line,
+        module_name: modTitle,
         topics: [],
       };
       continue;
     }
 
-    // Line is likely a topic under the current module
-    let cleanTopic = line
+    // Process line content as topics
+    let cleanLine = line
       .replace(/^[\d\.\-\*•–—\)\(]+/, "")
+      .replace(/[\.\s]+$/, "")
       .trim();
 
+    if (!cleanLine || isNoiseLine(cleanLine)) continue;
+
     // Check if line contains inline subtopics separated by colon or dash
-    let inlineSubtopics = [];
-    if (cleanTopic.includes(":") || cleanTopic.includes(" - ")) {
-      const parts = cleanTopic.includes(":") ? cleanTopic.split(":") : cleanTopic.split(" - ");
-      if (parts[0].trim().length >= 3 && parts[1].trim().length >= 3) {
-        cleanTopic = parts[0].trim();
-        inlineSubtopics = parts[1]
-          .split(/[,;]/)
-          .map((s) => s.trim())
-          .filter((s) => s.length >= 2);
+    if (cleanLine.includes(":") || cleanLine.includes(" - ")) {
+      const parts = cleanLine.includes(":") ? cleanLine.split(":") : cleanLine.split(" - ");
+      const mainTitle = parts[0].trim();
+      const subtopics = parts[1]
+        ? parts[1]
+            .split(/[,;]/)
+            .map((s) => s.trim().replace(/^[\d\.\-\*•–—\)\(]+/, ""))
+            .filter((s) => s.length >= 2)
+        : [];
+
+      if (mainTitle.length >= 3 && mainTitle.length <= 90) {
+        addTopicToCurrentModule(mainTitle, subtopics);
+        continue;
       }
     }
 
-    if (cleanTopic.length >= 4 && cleanTopic.length <= 120) {
-      if (!currentModule) {
-        currentModule = {
-          module_name: `Module 1: Foundations of ${baseTitle}`,
-          topics: [],
-        };
-      }
+    // Check if line contains comma or semicolon separated list of multiple topics
+    if ((cleanLine.includes(",") || cleanLine.includes(";")) && cleanLine.split(",").length >= 2) {
+      const topicList = cleanLine
+        .split(/[,;]/)
+        .map((s) => s.trim().replace(/^[\d\.\-\*•–—\)\(]+/, "").replace(/\.$/, "").trim())
+        .filter((s) => s.length >= 3 && s.length <= 80);
 
-      // Avoid duplicate topic titles in the same module
-      if (!currentModule.topics.some((t) => t.title.toLowerCase() === cleanTopic.toLowerCase())) {
-        const lower = cleanTopic.toLowerCase();
-        let difficulty = 1.0;
-        let hours = 1.5;
-
-        if (lower.includes("advanced") || lower.includes("algorithm") || lower.includes("design") || lower.includes("analysis")) {
-          difficulty = 1.25;
-          hours = 2.5;
-        } else if (lower.includes("introduction") || lower.includes("overview") || lower.includes("basics")) {
-          difficulty = 1.0;
-          hours = 1.5;
-        } else if (lower.includes("implementation") || lower.includes("practical") || lower.includes("system")) {
-          difficulty = 1.15;
-          hours = 2.0;
+      if (topicList.length >= 2) {
+        for (const item of topicList) {
+          addTopicToCurrentModule(item, []);
         }
-
-        const explanation = buildTopicExplanation(cleanTopic, currentModule.module_name, inlineSubtopics);
-
-        currentModule.topics.push({
-          title: cleanTopic,
-          description: explanation.description,
-          content_covered: explanation.content_covered,
-          estimated_hours: hours,
-          difficulty_weight: difficulty,
-        });
+        continue;
       }
+    }
+
+    // Single topic on this line
+    if (cleanLine.length >= 3 && cleanLine.length <= 110) {
+      addTopicToCurrentModule(cleanLine, []);
     }
   }
 
@@ -436,13 +773,53 @@ export const parseAndSummarizeText = (rawText, originalName) => {
     modules.push(currentModule);
   }
 
-  // If extraction yielded too few structured topics, merge with intelligent fallback
-  if (modules.length === 0 || modules.reduce((sum, m) => sum + m.topics.length, 0) < 3) {
-    return generateFallbackHierarchy(null, originalName);
+  // If topics were extracted without explicit modules, cluster them logically
+  if (modules.length === 0 && lines.length > 0) {
+    const fallbackTopics = [];
+    for (const line of lines) {
+      const clean = line.replace(/^[\d\.\-\*•–—\)\(]+/, "").trim();
+      if (clean.length >= 3 && clean.length <= 90 && !isNoiseLine(clean)) {
+        fallbackTopics.push(clean);
+      }
+    }
+
+    if (fallbackTopics.length >= 2) {
+      const chunkSize = Math.max(3, Math.ceil(fallbackTopics.length / 4));
+      for (let i = 0; i < fallbackTopics.length; i += chunkSize) {
+        const chunk = fallbackTopics.slice(i, i + chunkSize);
+        const modNum = Math.floor(i / chunkSize) + 1;
+        const mod = {
+          module_name: `Unit ${modNum}: ${chunk[0]} & Related Concepts`,
+          topics: [],
+        };
+        for (const t of chunk) {
+          const exp = buildTopicExplanation(t, mod.module_name);
+          mod.topics.push({
+            title: t,
+            description: exp.description,
+            content_covered: exp.content_covered,
+            estimated_hours: 2.0,
+            difficulty_weight: 1.15,
+          });
+        }
+        modules.push(mod);
+      }
+    }
+  }
+
+  const totalTopics = modules.reduce((sum, m) => sum + m.topics.length, 0);
+
+  // Validate that meaningful syllabus topics were extracted
+  if (modules.length === 0 || totalTopics === 0) {
+    const error = new Error(
+      "Unable to extract distinct syllabus topics from the uploaded document. Please ensure the syllabus contains clear units, chapters, or topic headings."
+    );
+    error.statusCode = 422;
+    error.code = "INSUFFICIENT_SYLLABUS_TEXT";
+    throw error;
   }
 
   // Calculate summary metrics
-  const totalTopics = modules.reduce((sum, m) => sum + m.topics.length, 0);
   const totalHours = modules.reduce(
     (sum, m) =>
       sum + m.topics.reduce((tSum, t) => tSum + t.estimated_hours * t.difficulty_weight, 0),
@@ -454,16 +831,16 @@ export const parseAndSummarizeText = (rawText, originalName) => {
       0
     ) / totalTopics;
 
-  const easyCount = modules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight <= 1.0).length;
-  const hardCount = modules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight >= 1.2).length;
+  const easyCount = modules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight <= 1.05).length;
+  const hardCount = modules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight >= 1.25).length;
   const mediumCount = Math.max(0, totalTopics - easyCount - hardCount);
 
   const summaryPoints = [
-    `Curriculum Structure: Extracted ${modules.length} modules covering ${totalTopics} key conceptual topics.`,
-    `Workload Estimate: Total required effort estimated at ~${Math.round(totalHours * 10) / 10} study hours (weighted average difficulty: ${(Math.round(avgDifficulty * 100) / 100).toFixed(2)}x).`,
+    `Curriculum Structure: Extracted ${modules.length} syllabus modules covering ${totalTopics} specific topics.`,
+    `Workload Estimate: Total required effort estimated at ~${Math.round(totalHours * 10) / 10} study hours (average difficulty: ${(Math.round(avgDifficulty * 100) / 100).toFixed(2)}x).`,
     `Core Focus Areas: Spans ${modules.slice(0, 3).map((m) => `"${m.module_name.replace(/^(module|unit|chapter)\s*\d*[:\s\-]*/i, "").trim()}"`).join(", ")}${modules.length > 3 ? `, plus ${modules.length - 3} more modules` : ""}.`,
     `Complexity Distribution: Comprises ${easyCount} foundational, ${mediumCount} intermediate, and ${hardCount} advanced topics.`,
-    `Adaptive SM-2 Strategy: Spaced repetition intervals (1d, 3d, 7d, 14d) automatically adjust based on post-session confidence ratings.`,
+    `Adaptive SM-2 Strategy: Spaced repetition intervals automatically adjust based on post-session confidence ratings to optimize retention.`,
   ];
 
   return {
@@ -475,119 +852,11 @@ export const parseAndSummarizeText = (rawText, originalName) => {
       average_difficulty: Math.round(avgDifficulty * 100) / 100,
       overview: `Curriculum extracted for "${baseTitle}". Spans ${modules.length} modules covering ${totalTopics} key conceptual topics requiring ~${Math.round(totalHours)} study hours.`,
       summary_points: summaryPoints,
-    },
-    modules,
-  };
-};
-
-/**
- * Fallback parser for syllabus text/files when Python NLP microservice is offline
- */
-const generateFallbackHierarchy = (filePath, originalName) => {
-  const baseTitle = originalName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-
-  const modules = [
-    {
-      module_name: `Module 1: Foundations of ${baseTitle}`,
-      topics: [
-        {
-          title: `Core Principles & Introduction to ${baseTitle}`,
-          description: `Introduces the foundational concepts, theoretical background, and architectural core of ${baseTitle}.`,
-          content_covered: [
-            "Theoretical foundations and core domain terminology",
-            "Core architecture and execution models",
-            "Fundamental design principles and building blocks",
-            "Basic setup, workflow pipelines, and introductory examples",
-          ],
-          estimated_hours: 2.0,
-          difficulty_weight: 1.0,
-        },
-        {
-          title: `Key Architectures & Fundamentals`,
-          description: `Examines structural frameworks, underlying components, and operational mechanics central to ${baseTitle}.`,
-          content_covered: [
-            "Structural frameworks and component breakdown",
-            "Data representations and control flows",
-            "Interface definitions and communication protocols",
-            "Comparative analysis of architectural patterns",
-          ],
-          estimated_hours: 2.5,
-          difficulty_weight: 1.1,
-        },
-      ],
-    },
-    {
-      module_name: `Module 2: Advanced Topics & Algorithms`,
-      topics: [
-        {
-          title: `Analytical Methods & Processing Models`,
-          description: `Dives into algorithmic procedures, mathematical modeling, and analytical techniques for solving domain problems.`,
-          content_covered: [
-            "Algorithmic procedures and computational logic",
-            "Complexity metrics and asymptotic performance analysis",
-            "Data processing pipelines and state transformations",
-            "Optimization techniques and bottleneck identification",
-          ],
-          estimated_hours: 3.0,
-          difficulty_weight: 1.3,
-        },
-        {
-          title: `Practical Implementation & Optimization`,
-          description: `Focuses on concrete implementation strategies, error handling, performance tuning, and scalable designs.`,
-          content_covered: [
-            "Implementation patterns and code organization",
-            "Resource management and efficiency tuning",
-            "Error recovery, edge-case mitigation, and validation",
-            "Unit testing and benchmarking methodologies",
-          ],
-          estimated_hours: 2.5,
-          difficulty_weight: 1.2,
-        },
-      ],
-    },
-    {
-      module_name: `Module 3: System Design & Evaluation`,
-      topics: [
-        {
-          title: `Synthesis, Testing & Case Studies`,
-          description: `Integrates multiple concepts through end-to-end evaluation, testing frameworks, and real-world application case studies.`,
-          content_covered: [
-            "End-to-end system synthesis and integration",
-            "Verification, validation, and test coverage strategies",
-            "Real-world case studies and industry applications",
-            "Synthesis, review, and exam preparation checklists",
-          ],
-          estimated_hours: 2.0,
-          difficulty_weight: 1.1,
-        },
-      ],
-    },
-  ];
-
-  const totalTopics = modules.reduce((sum, m) => sum + m.topics.length, 0);
-  const totalHours = modules.reduce(
-    (sum, m) =>
-      sum + m.topics.reduce((tSum, t) => tSum + t.estimated_hours * t.difficulty_weight, 0),
-    0
-  );
-
-  const summaryPoints = [
-    `Curriculum Structure: Extracted 3 foundational modules covering ${totalTopics} key conceptual topics.`,
-    `Workload Estimate: Total study investment of ~${Math.round(totalHours * 10) / 10} hours with an average difficulty factor of 1.14x.`,
-    `Core Focus Areas: Spans Foundations, Advanced Topics & Algorithms, and System Design & Evaluation.`,
-    `Complexity Distribution: Structured from introductory concepts to analytical methods and practical implementation.`,
-    `Adaptive SM-2 Strategy: Daily study pacing with automated SuperMemo spaced review sessions to reinforce long-term memory.`,
-  ];
-
-  return {
-    course_name: baseTitle,
-    summary: {
-      total_modules: modules.length,
-      total_topics: totalTopics,
-      total_estimated_hours: Math.round(totalHours * 10) / 10,
-      average_difficulty: 1.14,
-      overview: `Curriculum extracted for "${baseTitle}". Spans ${modules.length} modules covering ${totalTopics} key conceptual topics requiring ~${Math.round(totalHours)} study hours.`,
-      summary_points: summaryPoints,
+      difficulty_breakdown: {
+        easy: easyCount,
+        medium: mediumCount,
+        hard: hardCount,
+      },
     },
     modules,
   };
@@ -614,14 +883,13 @@ const validateNLPStructure = (data) => {
 };
 
 /**
- * Parse syllabus document via external Python NLP service, with retries, pdf-parse, and fallback
+ * Parse syllabus document via external NLP service, LLM, or deterministic syllabus extractor
  */
 export const parseSyllabusDocument = async (filePath, originalName) => {
   const url = config.nlpServiceUrl;
-  const maxRetries = 2;
-  let lastError = null;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  // 1. Try external Python NLP service if running and reachable
+  if (url && !url.includes("localhost:8000")) {
     try {
       const formData = new FormData();
       if (fs.existsSync(filePath)) {
@@ -632,11 +900,10 @@ export const parseSyllabusDocument = async (filePath, originalName) => {
 
       const response = await axios.post(url, formData, {
         headers: formData.getHeaders ? formData.getHeaders() : {},
-        timeout: 10000,
+        timeout: 3000,
       });
 
       if (response.data && validateNLPStructure(response.data)) {
-        // Ensure all topics have rich description and content_covered
         for (const mod of response.data.modules) {
           for (const t of mod.topics) {
             if (!t.description || !t.content_covered || !Array.isArray(t.content_covered) || t.content_covered.length === 0) {
@@ -650,20 +917,23 @@ export const parseSyllabusDocument = async (filePath, originalName) => {
         }
         return response.data;
       }
-    } catch (err) {
-      lastError = err;
-      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    } catch {
+      // Gracefully continue to internal extraction
     }
   }
 
-  // Extract real text from file
+  // 2. Extract text from uploaded document
   const rawText = await extractRawTextFromFile(filePath, originalName);
-  return parseAndSummarizeText(rawText, originalName);
+
+  // 3. Parse and summarize curriculum from actual text
+  return await parseAndSummarizeText(rawText, originalName);
 };
 
 export default {
   extractRawTextFromFile,
+  cleanSyllabusText,
   parseAndSummarizeText,
   parseSyllabusDocument,
   buildTopicExplanation,
+  extractTopicsViaLLM,
 };
