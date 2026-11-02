@@ -84,6 +84,7 @@ export const getActivePlan = async (req, res, next) => {
           title: t.title,
           description: t.description || "",
           content_covered: Array.isArray(t.content_covered) ? t.content_covered : [],
+          original_topics: Array.isArray(t.original_topics) ? t.original_topics : [],
           estimated_hours: Number(t.estimated_hours),
           difficulty_weight: Number(t.difficulty_weight),
           ease_factor: Number(t.ease_factor),

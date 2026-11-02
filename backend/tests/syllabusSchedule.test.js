@@ -148,7 +148,12 @@ describe("Syllabus Analysis & Personalized Study Schedule Generation", () => {
         const { modules, summary } = extractRes.body.data;
         expect(Array.isArray(modules)).toBe(true);
         expect(modules.length).toBeGreaterThanOrEqual(3);
-        expect(summary.total_topics).toBeGreaterThanOrEqual(6);
+        // Target session count for full syllabus must be within 8 to 20 sessions
+        expect(summary.total_topics).toBeGreaterThanOrEqual(8);
+        expect(summary.total_topics).toBeLessThanOrEqual(20);
+        // Workload effort must be realistic (~12-25 hours, never hundreds)
+        expect(summary.total_estimated_hours).toBeGreaterThanOrEqual(12);
+        expect(summary.total_estimated_hours).toBeLessThanOrEqual(25);
 
         // Collect all extracted topic names
         const topicTitles = modules.flatMap((m) => m.topics.map((t) => t.title));
@@ -168,13 +173,15 @@ describe("Syllabus Analysis & Personalized Study Schedule Generation", () => {
           expect(forbiddenGenericTitles).not.toContain(title);
         }
 
-        // Verify each topic has genuine description and content_covered
+        // Verify each topic has genuine description, content_covered, and original_topics mapping
         for (const mod of modules) {
           for (const topic of mod.topics) {
             expect(typeof topic.description).toBe("string");
             expect(topic.description.length).toBeGreaterThan(15);
             expect(Array.isArray(topic.content_covered)).toBe(true);
             expect(topic.content_covered.length).toBeGreaterThan(0);
+            expect(Array.isArray(topic.original_topics)).toBe(true);
+            expect(topic.original_topics.length).toBeGreaterThan(0);
           }
         }
       });
@@ -208,6 +215,61 @@ describe("Syllabus Analysis & Personalized Study Schedule Generation", () => {
       expect(osList).toContain("process");
       expect(cnList).toContain("transmission control protocol");
       expect(mlList).toContain("regression");
+    });
+
+    it("should compress Stack & Queue operations and types into grouped sessions without losing original topics", async () => {
+      const stackQueueSyllabus = `COURSE: DATA STRUCTURES
+Unit 1: Linear Data Structures
+- Stack
+- Push Operation
+- Pop Operation
+- Stack Applications
+- Queue
+- Circular Queue
+- Deque`;
+
+      const uploadRes = await request(app)
+        .post("/api/v1/upload")
+        .set("Authorization", `Bearer ${authToken}`)
+        .attach("file", Buffer.from(stackQueueSyllabus), "stack_queue_syllabus.txt");
+
+      expect(uploadRes.status).toBe(200);
+      const fileId = uploadRes.body.data.file_id;
+
+      const extractRes = await request(app)
+        .post("/api/v1/plans/extract-topics")
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({ file_id: fileId });
+
+      expect(extractRes.status).toBe(200);
+      const { modules } = extractRes.body.data;
+      expect(modules.length).toBe(1);
+      const topics = modules[0].topics;
+      expect(topics.length).toBe(2);
+
+      const stackTopic = topics.find((t) => t.title.toLowerCase().includes("stack"));
+      const queueTopic = topics.find((t) => t.title.toLowerCase().includes("queue"));
+      expect(stackTopic).toBeDefined();
+      expect(queueTopic).toBeDefined();
+
+      expect(stackTopic.title).toBe("Stack: Operations and Applications");
+      expect(queueTopic.title).toBe("Queue: Types, Operations and Applications");
+
+      // Verify original_topics contains all 7 individual topics
+      expect(stackTopic.original_topics).toEqual(
+        expect.arrayContaining(["Stack", "Push Operation", "Pop Operation", "Stack Applications"])
+      );
+      expect(queueTopic.original_topics).toEqual(
+        expect.arrayContaining(["Queue", "Circular Queue", "Deque"])
+      );
+
+      // Verify 100% academic coverage in content_covered
+      const stackContent = stackTopic.content_covered.join(" ");
+      const queueContent = queueTopic.content_covered.join(" ");
+      expect(stackContent).toContain("Push Operation");
+      expect(stackContent).toContain("Pop Operation");
+      expect(queueContent).toContain("Circular Queue");
+      expect(queueContent).toContain("Deque");
     });
   });
 
@@ -262,6 +324,48 @@ describe("Syllabus Analysis & Personalized Study Schedule Generation", () => {
       // Verify pedagogical session types
       const sessionTypes = new Set(sessions.map((s) => s.session_type));
       expect(sessionTypes.has("INITIAL")).toBe(true);
+      expect(sessionTypes.has("ASSESSMENT")).toBe(true);
+    });
+
+    it("Test 10-Day Plan: should generate sessions covering exactly 10 days with 0 empty days", async () => {
+      const startDate = "2026-11-01";
+      const res = await request(app)
+        .post("/api/v1/plans/generate")
+        .set("Authorization", `Bearer ${authToken}`)
+        .send({
+          course_name: "DSA 10-Day Accelerated Prep",
+          file_id: dsaFileId,
+          start_date: startDate,
+          duration_days: 10,
+          daily_max_hours: 4.5,
+        });
+
+      expect(res.status).toBe(201);
+      const data = res.body.data;
+      expect(data.duration_days).toBe(10);
+
+      const sessions = data.sessions;
+      expect(sessions.length).toBeGreaterThanOrEqual(10);
+
+      const uniqueDates = new Set(
+        sessions.map((s) => formatDateOnly(s.scheduled_date))
+      );
+
+      // Must cover all 10 calendar days with ZERO empty days
+      expect(uniqueDates.size).toBe(10);
+      for (let dayOffset = 0; dayOffset < 10; dayOffset++) {
+        const expectedDate = formatDateOnly(addDays(startDate, dayOffset));
+        expect(uniqueDates.has(expectedDate)).toBe(true);
+      }
+
+      // Verify 100% topic coverage
+      const topicIdsInPlan = new Set(sessions.map((s) => s.topic_id));
+      expect(topicIdsInPlan.size).toBe(data.total_topics);
+
+      // Verify milestone spaced review exists (Day 4)
+      const sessionTypes = new Set(sessions.map((s) => s.session_type));
+      expect(sessionTypes.has("INITIAL")).toBe(true);
+      expect(sessionTypes.has("REVIEW")).toBe(true);
       expect(sessionTypes.has("ASSESSMENT")).toBe(true);
     });
 

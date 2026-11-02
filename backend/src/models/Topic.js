@@ -33,6 +33,10 @@ const topicSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    original_topics: {
+      type: [String],
+      default: [],
+    },
     estimated_hours: {
       type: Number,
       default: 1.0,

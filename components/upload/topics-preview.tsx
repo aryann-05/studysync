@@ -514,7 +514,16 @@ export function TopicsPreview({
               onClick={() => handleDurationPreset(7)}
               className="h-8 text-xs font-medium"
             >
-              7 Days Plan
+              7 Days
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={durationDays === 10 ? "default" : "outline"}
+              onClick={() => handleDurationPreset(10)}
+              className="h-8 text-xs font-medium"
+            >
+              10 Days
             </Button>
             <Button
               type="button"
@@ -523,7 +532,7 @@ export function TopicsPreview({
               onClick={() => handleDurationPreset(15)}
               className="h-8 text-xs font-medium"
             >
-              15 Days Plan
+              15 Days
             </Button>
             <Button
               type="button"
@@ -532,7 +541,7 @@ export function TopicsPreview({
               onClick={() => handleDurationPreset(30)}
               className="h-8 text-xs font-medium"
             >
-              30 Days Plan
+              30 Days
             </Button>
             <div className="flex items-center gap-1.5 ml-auto">
               <span className="text-xs text-muted-foreground font-medium">Custom:</span>

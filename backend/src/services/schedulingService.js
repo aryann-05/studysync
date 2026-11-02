@@ -67,6 +67,9 @@ export const generateInitialSchedule = (userId, createdTopics, startDate, examDa
     // 15-day plan: Day 4, Day 9
     milestoneRevisionIndices.add(Math.floor(totalDays * 0.33));
     milestoneRevisionIndices.add(Math.floor(totalDays * 0.66));
+  } else if (totalDays >= 8) {
+    // 10-day plan: Day 4
+    milestoneRevisionIndices.add(Math.floor(totalDays * 0.4));
   } else if (totalDays >= 6) {
     // 7-day plan: Day 3
     milestoneRevisionIndices.add(Math.floor(totalDays * 0.5));
@@ -325,7 +328,8 @@ export const createPlanWithHierarchy = async (userId, planData, nlpModules) => {
         title: t.title,
         description: t.description || "",
         content_covered: Array.isArray(t.content_covered) ? t.content_covered : [],
-        estimated_hours: Number(t.estimated_hours) || 2.0,
+        original_topics: Array.isArray(t.original_topics) ? t.original_topics : [],
+        estimated_hours: Number(t.estimated_hours) || 1.5,
         difficulty_weight: Number(t.difficulty_weight) || 1.15,
         ease_factor: 2.5,
         repetition_number: 0,

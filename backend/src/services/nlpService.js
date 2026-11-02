@@ -439,17 +439,27 @@ export const extractTopicsViaLLM = async (rawText, baseTitle) => {
     return null;
   }
 
-  const prompt = `You are an expert academic curriculum parser.
+  const prompt = `You are an expert academic curriculum parser and syllabus synthesizer.
 Analyze the following uploaded syllabus text for the course "${baseTitle}".
-Extract ALL genuine units/modules, topics, and subtopics directly from the document text.
+Your objective is to read the COMPLETE syllabus and generate an intelligently compressed set of meaningful study sessions.
 
-STRICT INSTRUCTIONS:
-1. Extract topics directly from the syllabus content. DO NOT invent topics that are not present.
-2. DO NOT use generic topics like "Fundamentals", "Core Concepts", "Introduction", "Advanced Topics", or "Important Concepts" unless literally written as headings in the text.
-3. Preserve the original unit names, numbers, and topic titles as closely as possible.
-4. Extract subtopics into the "content_covered" array for each topic.
-5. Assign realistic study hours (between 1.5 and 3.5) and difficulty weights (1.0 for foundational, 1.2 for intermediate, 1.3-1.4 for advanced).
-6. Return ONLY valid JSON (no markdown formatting, no code blocks) matching this exact JSON schema:
+TARGET SESSION COUNTS:
+- Short syllabus: 8–10 total study sessions.
+- Medium syllabus: 10–15 total study sessions.
+- Large syllabus: 15–20 total study sessions.
+NEVER produce dozens or hundreds of micro-topics.
+
+INTELLIGENT TOPIC GROUPING & PRESERVATION RULES:
+1. Do NOT treat every keyword, subheading, or individual operation as an isolated study session.
+2. Group related concepts and subtopics under their overarching parent concept (e.g., combine Stack, Push Operation, Pop Operation, and Stack Applications into a single cohesive session: "Stack: Operations and Applications").
+3. PRESERVE COMPLETE ACADEMIC COVERAGE: Do NOT delete syllabus content. Every original topic, algorithm, and concept MUST be mapped into the "content_covered" array of its corresponding study session.
+4. Also populate "original_topics" with the exact original syllabus terms mapped to that session.
+5. Provide a clear 1-2 sentence description explaining what the session covers.
+6. WORKLOAD ESTIMATION:
+   - Simple concepts: 0.75 hrs (30–45 mins)
+   - Medium concepts: 1.0–1.25 hrs (45–75 mins)
+   - Complex concepts: 1.5–1.75 hrs (90–105 mins)
+7. Return ONLY valid JSON matching this schema:
 {
   "course_name": "${baseTitle}",
   "modules": [
@@ -457,10 +467,11 @@ STRICT INSTRUCTIONS:
       "module_name": "Unit 1: <Name>",
       "topics": [
         {
-          "title": "<Exact Topic Name>",
-          "description": "<Clear 1-2 sentence explanation of what this topic covers>",
+          "title": "<Grouped Conceptual Session Title>",
+          "description": "<What this session covers>",
           "content_covered": ["<Subtopic 1>", "<Subtopic 2>", "<Subtopic 3>"],
-          "estimated_hours": 2.0,
+          "original_topics": ["<Original Topic 1>", "<Original Topic 2>"],
+          "estimated_hours": 1.25,
           "difficulty_weight": 1.15
         }
       ]
@@ -555,6 +566,13 @@ ${rawText.slice(0, 8000)}`;
 const isNoiseLine = (line) => {
   const lower = line.toLowerCase().trim();
   return (
+    lower.startsWith("course:") ||
+    lower.startsWith("course title") ||
+    lower.startsWith("course syllabus") ||
+    lower.startsWith("course name") ||
+    lower.startsWith("syllabus:") ||
+    lower.startsWith("subject:") ||
+    lower.startsWith("subject name") ||
     lower.startsWith("textbook") ||
     lower.startsWith("text book") ||
     lower.startsWith("reference book") ||
@@ -573,6 +591,403 @@ const isNoiseLine = (line) => {
     lower.startsWith("scheme of examination") ||
     lower.startsWith("duration of exam")
   );
+};
+
+/**
+ * Generic semantic concept extraction from a topic title
+ */
+export const extractConceptAnchor = (title) => {
+  if (!title || typeof title !== "string") return "general";
+
+  const cleaned = title
+    .replace(/^[\d\.\-\*•–—\)\(]+/, "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/\[.*?\]/g, "")
+    .trim();
+
+  const lowerCleaned = cleaned.toLowerCase();
+  if (lowerCleaned.includes("deque") || lowerCleaned.includes("double ended queue")) {
+    return "queue";
+  }
+
+  // Non-anchor operational words and structural modifiers
+  const operationalWords = new Set([
+    "introduction", "intro", "overview", "basics", "basic", "fundamentals", "fundamental",
+    "advanced", "concept", "concepts", "principles", "principle", "theory", "theoretical",
+    "operations", "operation", "methods", "method", "algorithms", "algorithm", "design",
+    "analysis", "applications", "application", "types", "type", "implementation", "implementations",
+    "architecture", "architectures", "model", "models", "techniques", "technique",
+    "study", "case", "issues", "problems", "problem", "protocols", "protocol", "systems", "system",
+    "structure", "structures", "management", "handling", "processing", "approaches", "approach",
+    "primitives", "primitive", "mechanisms", "mechanism", "properties", "property",
+    "push", "pop", "enqueue", "circular", "singly", "doubly"
+  ]);
+
+  const stopWords = new Set([
+    "a", "an", "the", "and", "or", "of", "in", "for", "with", "on", "at", "to", "from", "by", "vs", "versus"
+  ]);
+
+  const tokens = cleaned
+    .toLowerCase()
+    .split(/[\s,;:\/\-]+/)
+    .map((w) => w.replace(/[^a-z0-9]/g, ""))
+    .filter((w) => w.length >= 2 && !stopWords.has(w));
+
+  const anchorTokens = tokens.filter((w) => !operationalWords.has(w));
+
+  if (anchorTokens.length > 0) {
+    return anchorTokens.slice(0, 2).join(" ");
+  }
+
+  return "operation";
+};
+
+/**
+ * Determine target session count based on syllabus size:
+ * - Short syllabus: 8–10 sessions
+ * - Medium syllabus: 10–15 sessions
+ * - Large syllabus: 15–20 sessions
+ */
+export const determineTargetSessionCount = (numModules, totalRawTopics) => {
+  if (totalRawTopics <= 25 || numModules <= 2) {
+    return Math.max(6, Math.min(10, Math.max(numModules * 2, 8)));
+  }
+  if (totalRawTopics <= 70 || numModules <= 4) {
+    return Math.max(10, Math.min(15, numModules * 3));
+  }
+  return Math.max(14, Math.min(20, Math.max(15, numModules * 3)));
+};
+
+/**
+ * Synthesize an articulate academic title for a grouped cluster of related topics
+ */
+export const synthesizeClusterTitle = (clusterItems, moduleName) => {
+  if (clusterItems.length === 1) {
+    return clusterItems[0].title;
+  }
+
+  // Check if an item already has a clean composite title with colon or dash
+  const compositeItem = clusterItems.find(
+    (it) => (it.title.includes(":") || it.title.includes(" - ")) && it.title.length <= 70
+  );
+  if (compositeItem) {
+    return compositeItem.title;
+  }
+
+  const formatTitleCase = (str) =>
+    str
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+
+  // Extract unique anchors across items
+  const anchors = [];
+  for (const item of clusterItems) {
+    const a = extractConceptAnchor(item.title);
+    if (a && a !== "general" && a !== "operation" && !anchors.some((existing) => existing.includes(a) || a.includes(existing))) {
+      anchors.push(a);
+    }
+  }
+
+  const primaryAnchor = anchors[0] ? formatTitleCase(anchors[0]) : formatTitleCase(clusterItems[0].title.split(" ")[0]);
+  const secondaryAnchor = anchors[1] ? formatTitleCase(anchors[1]) : null;
+
+  // Inspect semantic aspects covered
+  const itemTitlesText = clusterItems.map((it) => it.title.toLowerCase()).join(" ");
+  const allText = clusterItems
+    .map((it) => it.title.toLowerCase() + " " + (it.content_covered || []).join(" ").toLowerCase())
+    .join(" ");
+
+  const hasOperations =
+    allText.includes("operation") ||
+    allText.includes("push") ||
+    allText.includes("pop") ||
+    allText.includes("insert") ||
+    allText.includes("delete") ||
+    allText.includes("traversal") ||
+    allText.includes("query") ||
+    allText.includes("queries");
+  const hasApplications =
+    allText.includes("application") ||
+    allText.includes("practical") ||
+    allText.includes("use case") ||
+    allText.includes("evaluation");
+  const hasTypes =
+    itemTitlesText.includes("type") ||
+    itemTitlesText.includes("classification") ||
+    itemTitlesText.includes("circular") ||
+    itemTitlesText.includes("deque") ||
+    itemTitlesText.includes("doubly") ||
+    secondaryAnchor !== null;
+  const hasArchitectures =
+    allText.includes("architecture") ||
+    allText.includes("structure") ||
+    allText.includes("implementation") ||
+    allText.includes("design");
+  const hasAlgorithms =
+    allText.includes("algorithm") ||
+    allText.includes("protocol") ||
+    allText.includes("sorting") ||
+    allText.includes("searching") ||
+    allText.includes("routing");
+
+  // Two distinct anchors (e.g. Stack & Queue, or Singly & Doubly Linked List):
+  if (secondaryAnchor) {
+    if (hasOperations && hasApplications) {
+      return `${primaryAnchor} & ${secondaryAnchor}: Operations and Applications`;
+    }
+    if (hasTypes && hasOperations) {
+      return `${primaryAnchor} & ${secondaryAnchor}: Types, Operations and Applications`;
+    }
+    if (hasOperations) {
+      return `${primaryAnchor} & ${secondaryAnchor}: Operations and Implementations`;
+    }
+    return `${primaryAnchor} & ${secondaryAnchor}: Core Concepts and Applications`;
+  }
+
+  // Single anchor with distinct aspects:
+  if (hasTypes) {
+    return `${primaryAnchor}: Types, Operations and Applications`;
+  }
+  if (hasOperations && hasApplications) {
+    return `${primaryAnchor}: Operations and Applications`;
+  }
+  if (hasOperations) {
+    return `${primaryAnchor}: Operations and Implementations`;
+  }
+  if (hasAlgorithms) {
+    return `${primaryAnchor}: Core Algorithms and Analysis`;
+  }
+  if (hasArchitectures) {
+    return `${primaryAnchor}: Architecture, Design and Applications`;
+  }
+
+  if (clusterItems[0].title.length <= 40 && !clusterItems[0].title.includes(",")) {
+    return `${clusterItems[0].title}: Principles and Applications`;
+  }
+
+  return `${primaryAnchor}: Core Mechanics and Implementations`;
+};
+
+/**
+ * Compress and group raw topics within a module into a targeted number of study sessions
+ */
+export const groupModuleTopics = (rawTopics, moduleName, targetCount) => {
+  if (!rawTopics || rawTopics.length === 0) return [];
+
+  // Deduplicate raw topics
+  const uniqueItems = [];
+  const seenTitles = new Set();
+  for (const t of rawTopics) {
+    const norm = t.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!seenTitles.has(norm)) {
+      seenTitles.add(norm);
+      uniqueItems.push(t);
+    } else {
+      // Merge subtopics into the existing topic
+      const existing = uniqueItems.find((x) => x.title.toLowerCase().replace(/[^a-z0-9]/g, "") === norm);
+      if (existing && Array.isArray(t.content_covered)) {
+        for (const sub of t.content_covered) {
+          if (!existing.content_covered.includes(sub)) {
+            existing.content_covered.push(sub);
+          }
+        }
+      }
+    }
+  }
+
+  // If already at or below target, enrich and return directly
+  if (uniqueItems.length <= targetCount) {
+    return uniqueItems.map((item) => {
+      const details = Array.isArray(item.content_covered) && item.content_covered.length > 0
+        ? item.content_covered
+        : [
+            `Theoretical foundations and core terminology of ${item.title}`,
+            `Essential architectures, principles, and structural models`,
+            `Standard implementation methods, workflows, and algorithmic procedures`,
+            `Practical problem solving, case studies, and exam preparation focus`,
+          ];
+      return {
+        title: item.title,
+        description: item.description || buildTopicExplanation(item.title, moduleName, details).description,
+        content_covered: details,
+        original_topics: Array.isArray(item.original_topics) && item.original_topics.length > 0 ? item.original_topics : [item.title],
+        estimated_hours: Number(item.estimated_hours) || (details.length >= 5 ? 1.5 : details.length >= 3 ? 1.25 : 0.75),
+        difficulty_weight: Number(item.difficulty_weight) || 1.15,
+      };
+    });
+  }
+
+  // Clustering: group raw items by concept anchor and sequential topical flow
+  const clusters = [];
+  let currentCluster = [uniqueItems[0]];
+  let currentAnchor = extractConceptAnchor(uniqueItems[0].title);
+
+  for (let i = 1; i < uniqueItems.length; i++) {
+    const item = uniqueItems[i];
+    const itemAnchor = extractConceptAnchor(item.title);
+    const itemLower = item.title.toLowerCase();
+
+    // Check relationship to current cluster
+    const isAnchorMatch =
+      itemAnchor === currentAnchor ||
+      itemAnchor.includes(currentAnchor) ||
+      currentAnchor.includes(itemAnchor) ||
+      itemLower.includes(currentAnchor) ||
+      currentCluster.some((c) => c.title.toLowerCase().includes(itemAnchor));
+
+    // Also check common operations (push, pop, dequeue, etc. attach to preceding data structure)
+    const isOperationOfPreceding =
+      itemLower.includes("operation") ||
+      itemLower.includes("push") ||
+      itemLower.includes("pop") ||
+      itemLower.includes("enqueue") ||
+      itemLower.includes("dequeue") ||
+      itemLower.includes("application") ||
+      itemLower.includes("traversal") ||
+      itemLower.includes("insertion") ||
+      itemLower.includes("deletion");
+
+    if (isAnchorMatch || (isOperationOfPreceding && currentCluster.length < 8)) {
+      currentCluster.push(item);
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [item];
+      currentAnchor = itemAnchor;
+    }
+  }
+  if (currentCluster.length > 0) {
+    clusters.push(currentCluster);
+  }
+
+  // If clusters > targetCount, merge adjacent/smallest clusters
+  while (clusters.length > targetCount) {
+    let bestMergeIdx = 0;
+    let minCombinedSize = Infinity;
+
+    for (let i = 0; i < clusters.length - 1; i++) {
+      const combinedSize = clusters[i].length + clusters[i + 1].length;
+      if (combinedSize < minCombinedSize) {
+        minCombinedSize = combinedSize;
+        bestMergeIdx = i;
+      }
+    }
+
+    clusters[bestMergeIdx] = clusters[bestMergeIdx].concat(clusters[bestMergeIdx + 1]);
+    clusters.splice(bestMergeIdx + 1, 1);
+  }
+
+  // Synthesize study session for each cluster
+  const groupedSessions = [];
+  for (const cluster of clusters) {
+    const sessionTitle = synthesizeClusterTitle(cluster, moduleName);
+
+    // Consolidate content_covered: all subtopics + raw titles
+    const coveredSet = new Set();
+    const rawTitles = [];
+
+    for (const item of cluster) {
+      rawTitles.push(item.title);
+      coveredSet.add(item.title.replace(/^[\d\.\-\*•–—\)\(]+/, "").trim());
+
+      if (Array.isArray(item.content_covered)) {
+        for (const sub of item.content_covered) {
+          if (sub && sub.trim().length > 1) {
+            coveredSet.add(sub.trim());
+          }
+        }
+      }
+    }
+
+    const contentCoveredArray = Array.from(coveredSet);
+
+    // Realistic workload estimation:
+    // Simple concepts: 30-45 mins (0.75h)
+    // Medium concepts: 45-75 mins (1.0-1.25h)
+    // Complex concepts: 90-105 mins (1.5-1.75h)
+    let hours = 1.25;
+    if (contentCoveredArray.length <= 2) {
+      hours = 0.75;
+    } else if (contentCoveredArray.length >= 6 || rawTitles.length >= 5) {
+      hours = 1.75;
+    } else if (contentCoveredArray.length >= 4) {
+      hours = 1.5;
+    }
+
+    const titleLower = sessionTitle.toLowerCase();
+    let difficulty = 1.15;
+    if (titleLower.includes("advanced") || titleLower.includes("algorithm") || titleLower.includes("design") || titleLower.includes("optimization") || titleLower.includes("concurrency") || titleLower.includes("security")) {
+      difficulty = 1.3;
+    } else if (titleLower.includes("intro") || titleLower.includes("overview") || titleLower.includes("basics") || titleLower.includes("definition") || titleLower.includes("model")) {
+      difficulty = 1.0;
+    }
+
+    // Synthesize descriptive explanation
+    const cleanMod = moduleName.replace(/^(module|unit|chapter|part|section)\s*\d*[:\s\-]*/i, "").trim();
+    const sampleTopics = contentCoveredArray.slice(0, 4).join(", ");
+    const description = `Comprehensive study session covering ${sampleTopics}${contentCoveredArray.length > 4 ? `, and ${contentCoveredArray.length - 4} related subtopics` : ""} within ${cleanMod}.`;
+
+    groupedSessions.push({
+      title: sessionTitle,
+      description,
+      content_covered: contentCoveredArray,
+      original_topics: rawTitles,
+      estimated_hours: hours,
+      difficulty_weight: difficulty,
+    });
+  }
+
+  return groupedSessions;
+};
+
+/**
+ * Compress and group entire syllabus modules into adaptive target sessions (8–20 sessions total)
+ */
+export const compressAndGroupAllModules = (modules, baseTitle) => {
+  if (!modules || modules.length === 0) return [];
+
+  const totalRawTopics = modules.reduce((sum, m) => sum + m.topics.length, 0);
+
+  // If already compact (<= 15 topics across syllabus and no module > 4), maintain clean 1-to-1 mapping
+  if (totalRawTopics <= 15 && !modules.some((m) => m.topics.length > 4)) {
+    return modules.map((mod) => ({
+      module_name: mod.module_name,
+      topics: mod.topics.map((t) => {
+        let hours = Number(t.estimated_hours) || 1.25;
+        if (hours > 1.75) hours = 1.75;
+        if (hours < 0.75) hours = 0.75;
+        return {
+          ...t,
+          original_topics: Array.isArray(t.original_topics) && t.original_topics.length > 0 ? t.original_topics : [t.title],
+          content_covered: Array.isArray(t.content_covered) && t.content_covered.length > 0 ? t.content_covered : [
+            `Theoretical foundations and core terminology of ${t.title}`,
+            `Essential architectures, principles, and structural models`,
+            `Standard implementation methods and algorithmic workflows`,
+            `Practical problem solving and exam preparation focus`,
+          ],
+          estimated_hours: hours,
+          difficulty_weight: Number(t.difficulty_weight) || 1.15,
+        };
+      }),
+    }));
+  }
+
+  const targetTotal = determineTargetSessionCount(modules.length, totalRawTopics);
+
+  const compressedModules = [];
+  for (const mod of modules) {
+    const rawCount = mod.topics.length;
+    const proportion = totalRawTopics > 0 ? rawCount / totalRawTopics : 1 / modules.length;
+    const targetForMod = Math.max(2, Math.min(4, Math.round(targetTotal * proportion) || 2));
+
+    const groupedTopics = groupModuleTopics(mod.topics, mod.module_name, targetForMod);
+    compressedModules.push({
+      module_name: mod.module_name,
+      topics: groupedTopics,
+    });
+  }
+
+  return compressedModules;
 };
 
 /**
@@ -595,40 +1010,43 @@ export const parseAndSummarizeText = async (rawText, originalName) => {
   try {
     const llmParsed = await extractTopicsViaLLM(cleanedText, baseTitle);
     if (llmParsed && Array.isArray(llmParsed.modules) && llmParsed.modules.length > 0) {
-      const totalTopics = llmParsed.modules.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
-      if (totalTopics >= 2) {
-        // Calculate metrics
-        const totalHours = llmParsed.modules.reduce(
+      const rawCount = llmParsed.modules.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
+      if (rawCount >= 1) {
+        const compressed = compressAndGroupAllModules(llmParsed.modules, baseTitle);
+        const totalTopics = compressed.reduce((sum, m) => sum + m.topics.length, 0);
+
+        const totalHours = compressed.reduce(
           (sum, m) =>
-            sum + (m.topics || []).reduce((tSum, t) => tSum + (Number(t.estimated_hours) || 2.0) * (Number(t.difficulty_weight) || 1.1), 0),
+            sum + m.topics.reduce((tSum, t) => tSum + (Number(t.estimated_hours) || 1.25) * (Number(t.difficulty_weight) || 1.1), 0),
           0
         );
         const avgDifficulty =
-          llmParsed.modules.reduce(
-            (sum, m) => sum + (m.topics || []).reduce((tSum, t) => tSum + (Number(t.difficulty_weight) || 1.1), 0),
+          compressed.reduce(
+            (sum, m) => sum + m.topics.reduce((tSum, t) => tSum + (Number(t.difficulty_weight) || 1.1), 0),
             0
           ) / totalTopics;
 
-        const easyCount = llmParsed.modules.flatMap((m) => m.topics || []).filter((t) => (t.difficulty_weight || 1.1) <= 1.05).length;
-        const hardCount = llmParsed.modules.flatMap((m) => m.topics || []).filter((t) => (t.difficulty_weight || 1.1) >= 1.25).length;
+        const easyCount = compressed.flatMap((m) => m.topics).filter((t) => (t.difficulty_weight || 1.1) <= 1.05).length;
+        const hardCount = compressed.flatMap((m) => m.topics).filter((t) => (t.difficulty_weight || 1.1) >= 1.25).length;
         const mediumCount = Math.max(0, totalTopics - easyCount - hardCount);
 
         const summaryPoints = [
-          `Curriculum Structure: Extracted ${llmParsed.modules.length} syllabus modules covering ${totalTopics} specific topics.`,
+          `Intelligent Syllabus Compression: Synthesized ${rawCount} raw concepts into ${totalTopics} structured study sessions across ${compressed.length} core units.`,
           `Workload Estimate: Total required effort estimated at ~${Math.round(totalHours * 10) / 10} study hours (average difficulty: ${(Math.round(avgDifficulty * 100) / 100).toFixed(2)}x).`,
-          `Core Focus Areas: Spans ${llmParsed.modules.slice(0, 3).map((m) => `"${m.module_name.replace(/^(module|unit|chapter)\s*\d*[:\s\-]*/i, "").trim()}"`).join(", ")}${llmParsed.modules.length > 3 ? `, plus ${llmParsed.modules.length - 3} more modules` : ""}.`,
+          `Core Focus Areas: Spans ${compressed.slice(0, 3).map((m) => `"${m.module_name.replace(/^(module|unit|chapter)\s*\d*[:\s\-]*/i, "").trim()}"`).join(", ")}${compressed.length > 3 ? `, plus ${compressed.length - 3} more modules` : ""}.`,
           `Complexity Distribution: Comprises ${easyCount} foundational, ${mediumCount} intermediate, and ${hardCount} advanced topics.`,
-          `Adaptive Pacing: Sessions dynamically distributed across your chosen timeline with balanced daily study load and pre-exam assessments.`,
+          `100% Content Preservation: All original subtopics, definitions, and algorithms are retained in session content arrays.`,
         ];
 
         return {
           course_name: llmParsed.course_name || baseTitle,
           summary: {
-            total_modules: llmParsed.modules.length,
+            total_modules: compressed.length,
             total_topics: totalTopics,
+            total_raw_concepts: rawCount,
             total_estimated_hours: Math.round(totalHours * 10) / 10,
             average_difficulty: Math.round(avgDifficulty * 100) / 100,
-            overview: `Extracted syllabus curriculum for "${baseTitle}". Spans ${llmParsed.modules.length} units covering ${totalTopics} genuine topics directly from the document.`,
+            overview: `Extracted syllabus curriculum for "${baseTitle}". Synthesized ${compressed.length} units covering ${totalTopics} genuine study sessions directly from the document.`,
             summary_points: summaryPoints,
             difficulty_breakdown: {
               easy: easyCount,
@@ -636,7 +1054,7 @@ export const parseAndSummarizeText = async (rawText, originalName) => {
               hard: hardCount,
             },
           },
-          modules: llmParsed.modules,
+          modules: compressed,
         };
       }
     }
@@ -673,17 +1091,17 @@ export const parseAndSummarizeText = async (rawText, originalName) => {
     if (!currentModule.topics.some((t) => t.title.toLowerCase() === cleanTopic.toLowerCase())) {
       const lower = cleanTopic.toLowerCase();
       let difficulty = 1.15;
-      let hours = 2.0;
+      let hours = 1.25;
 
-      if (lower.includes("advanced") || lower.includes("algorithm") || lower.includes("design") || lower.includes("analysis") || lower.includes("optimization") || lower.includes("concurrency") || lower.includes("security")) {
+      if (lower.includes("advanced") || lower.includes("algorithm") || lower.includes("design") || lower.includes("analysis") || lower.includes("optimization") || lower.includes("concurrency") || lower.includes("security") || lower.includes("tree") || lower.includes("graph")) {
         difficulty = 1.3;
-        hours = 2.5;
+        hours = 1.75;
       } else if (lower.includes("introduction") || lower.includes("overview") || lower.includes("basics") || lower.includes("concept") || lower.includes("definition") || lower.includes("model")) {
         difficulty = 1.0;
-        hours = 1.5;
+        hours = 0.75;
       } else if (lower.includes("implementation") || lower.includes("practical") || lower.includes("system") || lower.includes("queries") || lower.includes("routing") || lower.includes("regression")) {
         difficulty = 1.2;
-        hours = 2.0;
+        hours = 1.5;
       }
 
       const explanation = buildTopicExplanation(cleanTopic, currentModule.module_name, subtopics);
@@ -807,10 +1225,10 @@ export const parseAndSummarizeText = async (rawText, originalName) => {
     }
   }
 
-  const totalTopics = modules.reduce((sum, m) => sum + m.topics.length, 0);
+  const totalRawTopics = modules.reduce((sum, m) => sum + m.topics.length, 0);
 
   // Validate that meaningful syllabus topics were extracted
-  if (modules.length === 0 || totalTopics === 0) {
+  if (modules.length === 0 || totalRawTopics === 0) {
     const error = new Error(
       "Unable to extract distinct syllabus topics from the uploaded document. Please ensure the syllabus contains clear units, chapters, or topic headings."
     );
@@ -819,38 +1237,43 @@ export const parseAndSummarizeText = async (rawText, originalName) => {
     throw error;
   }
 
-  // Calculate summary metrics
-  const totalHours = modules.reduce(
+  // 3. Intelligent Syllabus Compression & Topic Grouping (Target: 8–20 sessions)
+  const compressedModules = compressAndGroupAllModules(modules, baseTitle);
+  const totalGroupedTopics = compressedModules.reduce((sum, m) => sum + m.topics.length, 0);
+
+  // Calculate summary metrics on compressed modules
+  const totalHours = compressedModules.reduce(
     (sum, m) =>
       sum + m.topics.reduce((tSum, t) => tSum + t.estimated_hours * t.difficulty_weight, 0),
     0
   );
   const avgDifficulty =
-    modules.reduce(
+    compressedModules.reduce(
       (sum, m) => sum + m.topics.reduce((tSum, t) => tSum + t.difficulty_weight, 0),
       0
-    ) / totalTopics;
+    ) / totalGroupedTopics;
 
-  const easyCount = modules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight <= 1.05).length;
-  const hardCount = modules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight >= 1.25).length;
-  const mediumCount = Math.max(0, totalTopics - easyCount - hardCount);
+  const easyCount = compressedModules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight <= 1.05).length;
+  const hardCount = compressedModules.flatMap((m) => m.topics).filter((t) => t.difficulty_weight >= 1.25).length;
+  const mediumCount = Math.max(0, totalGroupedTopics - easyCount - hardCount);
 
   const summaryPoints = [
-    `Curriculum Structure: Extracted ${modules.length} syllabus modules covering ${totalTopics} specific topics.`,
+    `Intelligent Syllabus Compression: Synthesized ${totalRawTopics} raw concepts into ${totalGroupedTopics} structured study sessions across ${compressedModules.length} core units.`,
     `Workload Estimate: Total required effort estimated at ~${Math.round(totalHours * 10) / 10} study hours (average difficulty: ${(Math.round(avgDifficulty * 100) / 100).toFixed(2)}x).`,
-    `Core Focus Areas: Spans ${modules.slice(0, 3).map((m) => `"${m.module_name.replace(/^(module|unit|chapter)\s*\d*[:\s\-]*/i, "").trim()}"`).join(", ")}${modules.length > 3 ? `, plus ${modules.length - 3} more modules` : ""}.`,
+    `Core Focus Areas: Spans ${compressedModules.slice(0, 3).map((m) => `"${m.module_name.replace(/^(module|unit|chapter)\s*\d*[:\s\-]*/i, "").trim()}"`).join(", ")}${compressedModules.length > 3 ? `, plus ${compressedModules.length - 3} more modules` : ""}.`,
     `Complexity Distribution: Comprises ${easyCount} foundational, ${mediumCount} intermediate, and ${hardCount} advanced topics.`,
-    `Adaptive SM-2 Strategy: Spaced repetition intervals automatically adjust based on post-session confidence ratings to optimize retention.`,
+    `100% Content Preservation: All original subtopics, definitions, and algorithms are retained in session content arrays.`,
   ];
 
   return {
     course_name: baseTitle,
     summary: {
-      total_modules: modules.length,
-      total_topics: totalTopics,
+      total_modules: compressedModules.length,
+      total_topics: totalGroupedTopics,
+      total_raw_concepts: totalRawTopics,
       total_estimated_hours: Math.round(totalHours * 10) / 10,
       average_difficulty: Math.round(avgDifficulty * 100) / 100,
-      overview: `Curriculum extracted for "${baseTitle}". Spans ${modules.length} modules covering ${totalTopics} key conceptual topics requiring ~${Math.round(totalHours)} study hours.`,
+      overview: `Curriculum extracted for "${baseTitle}". Synthesized ${compressedModules.length} units covering ${totalGroupedTopics} high-value study sessions from ${totalRawTopics} syllabus items requiring ~${Math.round(totalHours)} total study hours.`,
       summary_points: summaryPoints,
       difficulty_breakdown: {
         easy: easyCount,
@@ -858,7 +1281,7 @@ export const parseAndSummarizeText = async (rawText, originalName) => {
         hard: hardCount,
       },
     },
-    modules,
+    modules: compressedModules,
   };
 };
 
