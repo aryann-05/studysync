@@ -7,6 +7,7 @@ import { parseSyllabusDocument } from "../services/nlpService.js";
 import { createPlanWithHierarchy } from "../services/schedulingService.js";
 import { reshuffleOverdueSessions } from "../services/reshuffleService.js";
 import { sendSuccess, sendError } from "../utils/response.js";
+import { logActivity } from "../services/activityService.js";
 
 /**
  * Extract topics and curriculum overview from an uploaded file:
@@ -25,6 +26,15 @@ export const extractTopics = async (req, res, next) => {
     }
 
     const nlpData = await parseSyllabusDocument(fileRecord.file_path, fileRecord.original_name);
+
+    if (req.user?.user_id) {
+      logActivity({
+        userId: req.user.user_id,
+        activityType: "ai_feature_usage",
+        description: `Extracted syllabus topics using NLP for "${fileRecord.original_name}".`,
+        metadata: { file_id, file_name: fileRecord.original_name, modules_count: nlpData.modules?.length },
+      }).catch(() => {});
+    }
 
     return sendSuccess(res, "Topics and curriculum extracted successfully", {
       file_id,
@@ -134,6 +144,13 @@ export const generatePlan = async (req, res, next) => {
       },
       targetModules
     );
+
+    logActivity({
+      userId,
+      activityType: "study_plan_creation",
+      description: `Generated study plan for "${course_name}" (${duration_days || "Custom"} days).`,
+      metadata: { plan_id: result?.plan?.plan_id, course_name, duration_days },
+    }).catch(() => {});
 
     return sendSuccess(
       res,

@@ -7,6 +7,9 @@ import FcmToken from "../src/models/FcmToken.js";
 import Quiz from "../src/models/Quiz.js";
 import QuizAttempt from "../src/models/QuizAttempt.js";
 import Upload from "../src/models/Upload.js";
+import ActivityLog from "../src/models/ActivityLog.js";
+import AuditLog from "../src/models/AuditLog.js";
+import AdminNotification from "../src/models/AdminNotification.js";
 
 /**
  * In-memory Mock Data Store for Mongoose Models
@@ -20,6 +23,9 @@ export const tables = {
   quizzes: [],
   quizAttempts: [],
   uploads: [],
+  activityLogs: [],
+  auditLogs: [],
+  adminNotifications: [],
 };
 
 export const resetMockDb = () => {
@@ -31,6 +37,9 @@ export const resetMockDb = () => {
   tables.quizzes = [];
   tables.quizAttempts = [];
   tables.uploads = [];
+  tables.activityLogs = [];
+  tables.auditLogs = [];
+  tables.adminNotifications = [];
 };
 
 // Helper to create a Mongoose query chain (thenable)
@@ -399,6 +408,16 @@ export const setupMockMongoose = () => {
       return results.map((q) => ({ ...q }));
     });
 
+  Quiz.countDocuments = async (filter = {}) => {
+    return tables.quizzes.filter((q) => matchFilter(q, filter)).length;
+  };
+
+  Quiz.deleteMany = async (filter = {}) => {
+    const before = tables.quizzes.length;
+    tables.quizzes = tables.quizzes.filter((q) => !matchFilter(q, filter));
+    return { deletedCount: before - tables.quizzes.length };
+  };
+
   // 7. QuizAttempt
   QuizAttempt.create = async (data) => {
     const record = {
@@ -508,5 +527,128 @@ export const setupMockMongoose = () => {
 
   Upload.countDocuments = async (filter = {}) => {
     return tables.uploads.filter((u) => matchFilter(u, filter)).length;
+  };
+
+  Upload.deleteMany = async (filter = {}) => {
+    const before = tables.uploads.length;
+    tables.uploads = tables.uploads.filter((u) => !matchFilter(u, filter));
+    return { deletedCount: before - tables.uploads.length };
+  };
+
+  // 8. ActivityLog
+  ActivityLog.create = async (data) => {
+    const items = Array.isArray(data) ? data : [data];
+    const created = items.map((d) => ({
+      activity_id: d.activity_id || uuidv4(),
+      user_id: d.user_id,
+      user_name: d.user_name || "",
+      user_email: d.user_email || "",
+      activity_type: d.activity_type || "other",
+      description: d.description || "",
+      metadata: d.metadata || {},
+      ip_address: d.ip_address || "127.0.0.1",
+      created_at: d.created_at || new Date(),
+    }));
+    tables.activityLogs.push(...created);
+    return Array.isArray(data) ? created : created[0];
+  };
+
+  ActivityLog.find = (filter = {}) =>
+    createQuery((select, sort) => {
+      let results = tables.activityLogs.filter((a) => matchFilter(a, filter));
+      if (sort?.created_at === -1) {
+        results.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      }
+      return results.map((a) => ({ ...a }));
+    });
+
+  ActivityLog.countDocuments = async (filter = {}) => {
+    return tables.activityLogs.filter((a) => matchFilter(a, filter)).length;
+  };
+
+  ActivityLog.deleteMany = async (filter = {}) => {
+    const before = tables.activityLogs.length;
+    tables.activityLogs = tables.activityLogs.filter((a) => !matchFilter(a, filter));
+    return { deletedCount: before - tables.activityLogs.length };
+  };
+
+  // 9. AuditLog
+  AuditLog.create = async (data) => {
+    const record = {
+      audit_id: data.audit_id || uuidv4(),
+      admin_user_id: data.admin_user_id || "system",
+      admin_name: data.admin_name || "",
+      admin_email: data.admin_email || "",
+      action: data.action,
+      target_resource: data.target_resource,
+      target_id: data.target_id || "",
+      details: data.details || {},
+      ip_address: data.ip_address || "127.0.0.1",
+      created_at: data.created_at || new Date(),
+    };
+    tables.auditLogs.push(record);
+    return { ...record };
+  };
+
+  AuditLog.find = (filter = {}) =>
+    createQuery((select, sort) => {
+      let results = tables.auditLogs.filter((a) => matchFilter(a, filter));
+      if (sort?.created_at === -1) {
+        results.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      }
+      return results.map((a) => ({ ...a }));
+    });
+
+  AuditLog.countDocuments = async (filter = {}) => {
+    return tables.auditLogs.filter((a) => matchFilter(a, filter)).length;
+  };
+
+  // 10. AdminNotification
+  AdminNotification.create = async (data) => {
+    const items = Array.isArray(data) ? data : [data];
+    const created = items.map((d) => ({
+      notification_id: d.notification_id || uuidv4(),
+      type: d.type || "info",
+      title: d.title || "",
+      message: d.message || "",
+      severity: d.severity || "info",
+      is_read: d.is_read || false,
+      metadata: d.metadata || {},
+      created_at: d.created_at || new Date(),
+    }));
+    tables.adminNotifications.push(...created);
+    return Array.isArray(data) ? created : created[0];
+  };
+
+  AdminNotification.find = (filter = {}) =>
+    createQuery((select, sort) => {
+      let results = tables.adminNotifications.filter((n) => matchFilter(n, filter));
+      if (sort?.created_at === -1) {
+        results.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      }
+      return results.map((n) => ({ ...n }));
+    });
+
+  AdminNotification.countDocuments = async (filter = {}) => {
+    return tables.adminNotifications.filter((n) => matchFilter(n, filter)).length;
+  };
+
+  AdminNotification.updateOne = async (filter = {}, update = {}) => {
+    const target = tables.adminNotifications.find((n) => matchFilter(n, filter));
+    if (target && update.$set) {
+      Object.assign(target, update.$set);
+    }
+    return { modifiedCount: target ? 1 : 0 };
+  };
+
+  AdminNotification.updateMany = async (filter = {}, update = {}) => {
+    let count = 0;
+    tables.adminNotifications.forEach((n) => {
+      if (matchFilter(n, filter)) {
+        if (update.$set) Object.assign(n, update.$set);
+        count++;
+      }
+    });
+    return { modifiedCount: count };
   };
 };

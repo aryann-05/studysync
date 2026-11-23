@@ -34,18 +34,20 @@ export const SECONDARY_NAV: { label: string; href: string; icon: LucideIcon }[] 
 ];
 
 export const BRAND_COLORS = {
-  primary: "#059669",
-  secondary: "#047857",
-  accent: "#10B981",
-  error: "#EF4444",
+  primary: "#1E40AF",
+  secondary: "#3B82F6",
+  accent: "#DC2626",
+  lightBlue: "#EFF4FF",
+  lightRed: "#FEE2E2",
+  error: "#DC2626",
   warning: "#F59E0B",
 };
 
 export const TOPIC_COLORS = {
-  new: "#059669",
-  revision: "#0D9488",
+  new: "#1E40AF",
+  revision: "#3B82F6",
   completed: "#10B981",
-  missed: "#EF4444",
+  missed: "#DC2626",
 };
 
 export const CONFIDENCE_COLORS = {

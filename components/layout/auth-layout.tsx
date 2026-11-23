@@ -15,7 +15,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       <div className="pointer-events-none absolute inset-0 bg-grid opacity-40 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
 
       {/* Brand panel - hidden on mobile */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-primary via-secondary to-accent p-12 text-white lg:flex">
+      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-[#1E40AF] via-[#1E3A8A] to-[#DC2626] p-12 text-white lg:flex">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20 backdrop-blur">
             <GraduationCap className="h-6 w-6" />

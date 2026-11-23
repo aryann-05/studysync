@@ -134,7 +134,7 @@ export default function RegisterPage() {
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <ShieldCheck className={cn("h-4 w-4", selectedRole === "admin" ? "text-amber-500" : "")} />
+            <ShieldCheck className={cn("h-4 w-4", selectedRole === "admin" ? "text-[#DC2626]" : "")} />
             <span>Admin Account</span>
           </button>
         </div>
@@ -143,7 +143,7 @@ export default function RegisterPage() {
       {/* Role-Specific Header */}
       {selectedRole === "admin" ? (
         <div className="text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 mb-2.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#FEE2E2] text-[#DC2626] dark:bg-red-950/40 dark:text-red-400 border border-[#DC2626]/20 mb-2.5">
             <ShieldCheck className="h-3.5 w-3.5" />
             Administrator Registration
           </div>
@@ -154,9 +154,9 @@ export default function RegisterPage() {
             Register your administrator account to manage StudySync
           </p>
 
-          <div className="mt-4 p-3 rounded-lg border border-amber-500/25 bg-amber-500/5 text-left text-xs flex items-start gap-2.5">
-            <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-amber-700 dark:text-amber-300">
+          <div className="mt-4 p-3 rounded-lg border border-[#DC2626]/20 bg-[#FEE2E2]/40 text-left text-xs flex items-start gap-2.5">
+            <ShieldAlert className="h-4 w-4 text-[#DC2626] dark:text-red-400 shrink-0 mt-0.5" />
+            <p className="text-[#334155] dark:text-slate-300">
               Admin accounts have full administrative rights to view and manage registered users, account statuses, and system metrics.
             </p>
           </div>

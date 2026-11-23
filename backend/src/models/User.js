@@ -34,13 +34,13 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "user"],
+      enum: ["super_admin", "admin", "moderator", "user"],
       default: "user",
       index: true,
     },
     status: {
       type: String,
-      enum: ["active", "inactive"],
+      enum: ["active", "inactive", "suspended"],
       default: "active",
       index: true,
     },
@@ -50,9 +50,64 @@ const userSchema = new mongoose.Schema(
       default: "student",
       index: true,
     },
+    phone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    avatar: {
+      type: String,
+      default: "",
+    },
+    last_login_at: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    last_active_at: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+    academic_qualification: {
+      type: String,
+      default: "Undergraduate",
+      trim: true,
+    },
+    university_college: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    course_name: {
+      type: String,
+      default: "Computer Science",
+      trim: true,
+      index: true,
+    },
+    specialization: {
+      type: String,
+      default: "Computer Science & Engineering",
+      trim: true,
+      index: true,
+    },
+    current_semester_year: {
+      type: String,
+      default: "Semester 4",
+      trim: true,
+    },
+    academic_interests: {
+      type: [String],
+      default: [],
+    },
+    study_categories: {
+      type: [String],
+      default: [],
+    },
     created_at: {
       type: Date,
       default: Date.now,
+      index: true,
     },
   },
   {

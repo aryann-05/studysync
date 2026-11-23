@@ -27,6 +27,7 @@ import {
 import {
   getAdminUploads,
   deleteAdminUpload,
+  moderateAdminUpload,
 } from "@/services/admin";
 import type { AdminUploadItem, AdminUploadsStats } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,7 +173,7 @@ export default function AdminUploadsPage() {
     }
     if (docType === "docx" || ext === "docx" || ext === "doc") {
       return (
-        <span className="inline-flex items-center gap-1 rounded bg-teal-500/10 px-2 py-0.5 text-xs font-semibold text-teal-600 dark:text-teal-400 border border-teal-500/20">
+        <span className="inline-flex items-center gap-1 rounded bg-[#EFF4FF] px-2 py-0.5 text-xs font-semibold text-[#1E40AF] border border-[#1E40AF]/20">
           DOCX
         </span>
       );
@@ -235,14 +236,14 @@ export default function AdminUploadsPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Uploading Students
               </p>
-              <h3 className="mt-1 text-2xl font-bold text-teal-600 dark:text-teal-400">
+              <h3 className="mt-1 text-2xl font-bold text-[#1E40AF] dark:text-[#3B82F6]">
                 {stats.unique_users_count}
               </h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Unique active uploaders
               </p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EFF4FF] text-[#1E40AF] dark:text-[#3B82F6]">
               <Users className="h-6 w-6" />
             </div>
           </CardContent>
@@ -273,14 +274,14 @@ export default function AdminUploadsPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Storage Utilized
               </p>
-              <h3 className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+              <h3 className="mt-1 text-2xl font-bold text-[#3B82F6] dark:text-[#60A5FA]">
                 {formatBytes(stats.total_size_bytes)}
               </h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Disk allocation for user uploads
               </p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EFF4FF] text-[#3B82F6] dark:text-[#60A5FA]">
               <HardDrive className="h-6 w-6" />
             </div>
           </CardContent>
@@ -400,9 +401,10 @@ export default function AdminUploadsPage() {
                 <thead className="border-b bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th scope="col" className="px-6 py-3.5">Document Details</th>
+                    <th scope="col" className="px-6 py-3.5">Category & Subject</th>
                     <th scope="col" className="px-6 py-3.5">Uploaded By (User Details)</th>
-                    <th scope="col" className="px-6 py-3.5">Format</th>
-                    <th scope="col" className="px-6 py-3.5">File Size</th>
+                    <th scope="col" className="px-6 py-3.5">Format & Size</th>
+                    <th scope="col" className="px-6 py-3.5">Moderation</th>
                     <th scope="col" className="px-6 py-3.5">Date Uploaded</th>
                     <th scope="col" className="px-6 py-3.5 text-right">Actions</th>
                   </tr>
@@ -446,6 +448,16 @@ export default function AdminUploadsPage() {
                           </div>
                         </td>
 
+                        {/* Category & Subject */}
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-xs text-[#1E40AF]">
+                            {upload.academic_category || "Computer Science"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[180px]">
+                            {upload.subject || "General Syllabus"}
+                          </p>
+                        </td>
+
                         {/* User Details (Core User Request) */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -456,9 +468,12 @@ export default function AdminUploadsPage() {
                             </Avatar>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold text-foreground leading-tight">
+                                <Link
+                                  href={`/admin/users/${u.user_id}`}
+                                  className="font-semibold text-foreground leading-tight hover:text-[#1E40AF] hover:underline"
+                                >
                                   {u.full_name}
-                                </p>
+                                </Link>
                                 <span
                                   className={cn(
                                     "h-2 w-2 rounded-full shrink-0",
@@ -487,14 +502,29 @@ export default function AdminUploadsPage() {
                           </div>
                         </td>
 
-                        {/* Document Format */}
+                        {/* Document Format & Size */}
                         <td className="px-6 py-4">
-                          {getFormatBadge(upload.document_type, upload.original_name)}
+                          <div className="space-y-1">
+                            {getFormatBadge(upload.document_type, upload.original_name)}
+                            <p className="font-mono text-xs text-muted-foreground">
+                              {formatBytes(upload.size)}
+                            </p>
+                          </div>
                         </td>
 
-                        {/* File Size */}
-                        <td className="px-6 py-4 font-mono text-xs text-foreground">
-                          {formatBytes(upload.size)}
+                        {/* Moderation Status */}
+                        <td className="px-6 py-4">
+                          <Badge
+                            className={
+                              upload.moderation_status === "flagged"
+                                ? "bg-[#DC2626] text-white text-[10px] uppercase font-bold"
+                                : upload.moderation_status === "rejected"
+                                ? "bg-slate-200 text-slate-700 text-[10px] uppercase font-bold"
+                                : "bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold"
+                            }
+                          >
+                            {upload.moderation_status || "Approved"}
+                          </Badge>
                         </td>
 
                         {/* Date Uploaded */}

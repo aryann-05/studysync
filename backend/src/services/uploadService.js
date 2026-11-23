@@ -6,6 +6,7 @@ import { UPLOAD_DIR } from "../middleware/uploadMiddleware.js";
 const METADATA_FILE = path.join(UPLOAD_DIR, "uploads_registry.json");
 
 import Upload from "../models/Upload.js";
+import { logActivity } from "./activityService.js";
 
 // In-memory cache synced with metadata file
 let metadataStore = {};
@@ -74,8 +75,17 @@ export const registerUploadedFile = async (file, userId) => {
         mime_type: file.mimetype,
         size: file.size,
         document_type,
+        academic_category: "Computer Science",
+        subject: file.originalname.replace(/\.[^/.]+$/, "").replace(/_/g, " "),
       });
     }
+
+    logActivity({
+      userId,
+      activityType: document_type === "pdf" ? "pdf_upload" : "syllabus_upload",
+      description: `Uploaded file: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB)`,
+      metadata: { file_id, file_name: file.originalname, size: file.size, document_type },
+    }).catch(() => {});
   } catch (dbErr) {
     console.warn("⚠️ Failed to persist upload record to MongoDB:", dbErr.message);
   }

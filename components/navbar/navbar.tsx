@@ -32,10 +32,10 @@ export function Navbar({ variant = "main" }: { variant?: "main" | "dashboard" })
           </button>
 
           <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary text-white shadow">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#1E40AF] to-[#3B82F6] text-white shadow">
               <GraduationCap className="h-5 w-5" />
             </span>
-            <span className="text-lg font-bold tracking-tight">{APP_NAME}</span>
+            <span className="text-lg font-bold tracking-tight text-[#1E40AF] dark:text-[#3B82F6]">{APP_NAME}</span>
           </Link>
         </div>
 

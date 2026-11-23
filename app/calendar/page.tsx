@@ -148,7 +148,7 @@ export default function CalendarPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Plus className="h-4 w-4 text-teal-600" />
+                <Plus className="h-4 w-4 text-[#1E40AF]" />
                 Upcoming Topics
               </CardTitle>
             </CardHeader>
@@ -159,7 +159,7 @@ export default function CalendarPage() {
                     key={topic.id}
                     className="flex items-center gap-2 rounded-lg border p-2.5"
                   >
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-teal-600" />
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-[#1E40AF]" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{topic.name}</p>
                       <p className="text-xs text-muted-foreground">

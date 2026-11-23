@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
   Users,
   Search,
@@ -18,12 +19,18 @@ import {
   GraduationCap,
   UserCheck,
   RefreshCw,
+  Phone,
+  BookOpen,
+  Building,
+  Calendar,
+  ExternalLink,
 } from "lucide-react";
 import {
   getUsers,
   getUserById,
   updateUser,
   updateUserStatus,
+  updateUserRole,
   deleteUser,
 } from "@/services/admin";
 import type { AdminUser, AdminUserDetailResponse } from "@/types";
@@ -52,6 +59,20 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { getInitials } from "@/lib/utils";
 
+const ACADEMIC_CATEGORIES = [
+  "all",
+  "Computer Science",
+  "Artificial Intelligence & Machine Learning",
+  "Data Science",
+  "Information Technology",
+  "Software Engineering",
+  "Cyber Security",
+  "Cloud Computing",
+  "MCA",
+  "BCA",
+  "B.Tech",
+];
+
 export default function AdminUsersPage() {
   const { user: currentAdmin } = useAuth();
 
@@ -62,27 +83,42 @@ export default function AdminUsersPage() {
 
   // Filters & Pagination
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
 
-  // Modals state
-  const [selectedUserDetail, setSelectedUserDetail] = useState<AdminUserDetailResponse | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-
+  // Quick Edit Modal
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editFormData, setEditFormData] = useState({
     full_name: "",
     email: "",
+    phone: "",
+    academic_qualification: "",
+    university_college: "",
+    course_name: "",
+    specialization: "",
+    current_semester_year: "",
     daily_max_hours: 4,
     account_type: "student" as "student" | "regular",
   });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Status Change Dialog
+  const [statusTargetUser, setStatusTargetUser] = useState<AdminUser | null>(null);
+  const [statusAction, setStatusAction] = useState<"active" | "inactive" | "suspended">("active");
+  const [statusLoading, setStatusLoading] = useState(false);
+
+  // Role Change Dialog
+  const [roleTargetUser, setRoleTargetUser] = useState<AdminUser | null>(null);
+  const [roleAction, setRoleAction] = useState<"super_admin" | "admin" | "moderator" | "user">("user");
+  const [roleLoading, setRoleLoading] = useState(false);
+
+  // Delete User Dialog
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -95,8 +131,10 @@ export default function AdminUsersPage() {
         page,
         limit: 10,
         search: search.trim() || undefined,
+        role: roleFilter !== "all" ? roleFilter : undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         account_type: typeFilter !== "all" ? typeFilter : undefined,
+        specialization: categoryFilter !== "all" ? categoryFilter : undefined,
       });
 
       if (res.success && res.data) {
@@ -105,81 +143,95 @@ export default function AdminUsersPage() {
         setTotalUsers(res.data.pagination.total_users);
       }
     } catch (err: any) {
-      setError(err?.message || "Failed to load users list.");
+      setError(err?.message || "Failed to load registered users.");
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, typeFilter]);
+  }, [page, search, roleFilter, statusFilter, typeFilter, categoryFilter]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // View user details
-  const handleViewDetails = async (userId: string) => {
-    setDetailLoading(true);
-    setIsDetailOpen(true);
-    try {
-      const res = await getUserById(userId);
-      if (res.success && res.data) {
-        setSelectedUserDetail(res.data);
-      }
-    } catch (err: any) {
-      setError(err?.message || "Failed to fetch user details.");
-      setIsDetailOpen(false);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  // Open Edit Dialog
-  const handleOpenEdit = (user: AdminUser) => {
+  // Handle Edit User
+  const openEditModal = (user: AdminUser) => {
     setEditingUser(user);
     setEditFormData({
       full_name: user.full_name,
       email: user.email,
+      phone: user.phone || "",
+      academic_qualification: user.academic_qualification || "Undergraduate",
+      university_college: user.university_college || "",
+      course_name: user.course_name || "Computer Science",
+      specialization: user.specialization || "Computer Science & Engineering",
+      current_semester_year: user.current_semester_year || "Semester 4",
       daily_max_hours: user.daily_max_hours || 4,
       account_type: user.account_type || "student",
     });
     setEditError(null);
   };
 
-  // Save Edit User
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!editingUser) return;
+
     setEditSaving(true);
     setEditError(null);
+
     try {
       const res = await updateUser(editingUser.user_id, editFormData);
-      if (res.success && res.data) {
+      if (res.success) {
         setUsers((prev) =>
-          prev.map((u) => (u.user_id === editingUser.user_id ? res.data : u))
+          prev.map((u) => (u.user_id === editingUser.user_id ? { ...u, ...res.data } : u))
         );
         setEditingUser(null);
       }
     } catch (err: any) {
-      setEditError(err?.message || "Failed to update user.");
+      setEditError(err?.message || "Failed to save user updates.");
     } finally {
       setEditSaving(false);
     }
   };
 
-  // Toggle user active / inactive status
-  const handleToggleStatus = async (user: AdminUser) => {
-    const nextStatus = user.status === "active" ? "inactive" : "active";
+  // Handle Status Update
+  const handleConfirmStatus = async () => {
+    if (!statusTargetUser) return;
+    setStatusLoading(true);
     try {
-      const res = await updateUserStatus(user.user_id, nextStatus);
+      const res = await updateUserStatus(statusTargetUser.user_id, statusAction);
       if (res.success) {
         setUsers((prev) =>
-          prev.map((u) => (u.user_id === user.user_id ? { ...u, status: nextStatus } : u))
+          prev.map((u) => (u.user_id === statusTargetUser.user_id ? { ...u, status: statusAction } : u))
         );
+        setStatusTargetUser(null);
       }
     } catch (err: any) {
       alert(err?.message || "Failed to update account status.");
+    } finally {
+      setStatusLoading(false);
     }
   };
 
-  // Confirm delete user
+  // Handle Role Change
+  const handleConfirmRole = async () => {
+    if (!roleTargetUser) return;
+    setRoleLoading(true);
+    try {
+      const res = await updateUserRole(roleTargetUser.user_id, roleAction);
+      if (res.success) {
+        setUsers((prev) =>
+          prev.map((u) => (u.user_id === roleTargetUser.user_id ? { ...u, role: roleAction } : u))
+        );
+        setRoleTargetUser(null);
+      }
+    } catch (err: any) {
+      alert(err?.message || "Failed to change user role.");
+    } finally {
+      setRoleLoading(false);
+    }
+  };
+
+  // Handle Delete User
   const handleConfirmDelete = async () => {
     if (!deletingUser) return;
     setDeleteLoading(true);
@@ -199,73 +251,105 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header Banner */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Users Management</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Registered accounts ({totalUsers} total) across students and regular learners.
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-[#1E40AF] sm:text-3xl">
+              User Directory & Academic Management
+            </h1>
+            <Badge variant="outline" className="border-[#1E40AF]/30 text-[#1E40AF]">
+              {totalUsers} {totalUsers === 1 ? "User" : "Users"}
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Comprehensive control over registered students, academic qualifications, study categories, and access permissions.
           </p>
         </div>
+
         <Button
           variant="outline"
           size="sm"
           onClick={() => fetchUsers()}
-          disabled={loading}
-          className="self-start sm:self-auto text-xs"
+          className="self-start sm:self-auto text-xs border-[#1E40AF]/20 text-[#1E40AF] hover:bg-[#EFF4FF]"
         >
-          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          Refresh Directory
         </Button>
       </div>
 
-      {/* Search and Filters Bar */}
-      <Card className="shadow-sm border">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+      {/* Search & Filter Toolbar */}
+      <Card className="border-[#E2E8F0] shadow-sm">
+        <CardContent className="p-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {/* Search Input */}
-            <div className="relative flex-1">
+            <div className="relative lg:col-span-2">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search users by name or email..."
+                placeholder="Search by name, email, ID, university..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="pl-9 h-9 text-sm"
+                className="pl-9 text-xs"
               />
             </div>
 
-            {/* Filter by Account Type */}
-            <div className="flex items-center gap-2">
+            {/* Role Filter */}
+            <div>
               <select
-                aria-label="Filter by Account Type"
-                value={typeFilter}
+                aria-label="Filter by administrative role"
+                value={roleFilter}
                 onChange={(e) => {
-                  setTypeFilter(e.target.value);
+                  setRoleFilter(e.target.value);
                   setPage(1);
                 }}
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="all">All Account Types</option>
-                <option value="student">Students</option>
-                <option value="regular">Regular Users</option>
+                <option value="all">All Roles</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="moderator">Moderator</option>
+                <option value="user">Student User</option>
               </select>
+            </div>
 
-              {/* Filter by Status */}
+            {/* Status Filter */}
+            <div>
               <select
-                aria-label="Filter by Status"
+                aria-label="Filter by account status"
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
                   setPage(1);
                 }}
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="active">Active Accounts</option>
+                <option value="inactive">Inactive Accounts</option>
+                <option value="suspended">Suspended Accounts</option>
+              </select>
+            </div>
+
+            {/* Category / Specialization Filter */}
+            <div>
+              <select
+                aria-label="Filter by academic category or specialization"
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">All Categories</option>
+                {ACADEMIC_CATEGORIES.filter((c) => c !== "all").map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -273,174 +357,210 @@ export default function AdminUsersPage() {
       </Card>
 
       {/* Users Table */}
-      <Card className="shadow-sm border">
+      <Card className="border-[#E2E8F0] shadow-sm">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex h-64 items-center justify-center">
-              <LoadingSpinner size="md" label="Loading users..." />
+              <LoadingSpinner size="md" label="Loading student directory..." />
             </div>
           ) : error ? (
-            <div className="p-8 text-center text-sm text-destructive">
-              {error}
-              <div className="mt-3">
-                <Button variant="outline" size="sm" onClick={() => fetchUsers()}>
-                  Try Again
-                </Button>
-              </div>
+            <div className="p-8 text-center text-sm text-[#DC2626]">
+              <p>{error}</p>
+              <Button size="sm" variant="outline" onClick={fetchUsers} className="mt-3">
+                Retry
+              </Button>
             </div>
           ) : users.length === 0 ? (
-            <div className="p-12 text-center text-sm text-muted-foreground">
-              <Users className="mx-auto h-8 w-8 text-muted-foreground/50 mb-2" />
-              No registered users matched the search criteria.
+            <div className="p-12 text-center text-muted-foreground">
+              <Users className="mx-auto h-10 w-10 opacity-30 mb-2" />
+              <p className="text-sm font-medium">No users match your filter criteria.</p>
+              <p className="text-xs text-muted-foreground mt-1">Try resetting your search query or filters.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30 text-xs font-semibold uppercase text-muted-foreground">
-                    <th className="py-3.5 pl-4 sm:pl-6">Name / Email</th>
-                    <th className="py-3.5 px-3">Role</th>
-                    <th className="py-3.5 px-3">Classification</th>
-                    <th className="py-3.5 px-3">Status</th>
-                    <th className="py-3.5 px-3">Registered</th>
-                    <th className="py-3.5 pr-4 sm:pr-6 text-right">Actions</th>
+              <table className="w-full text-left text-xs">
+                <thead className="border-b bg-[#F8FAFC] text-[11px] font-bold uppercase text-[#64748B]">
+                  <tr>
+                    <th className="py-3 px-4">User / Contact</th>
+                    <th className="py-3 px-4">Academic Profile</th>
+                    <th className="py-3 px-4">Institution</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Last Active</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-[#E2E8F0]">
                   {users.map((u) => {
                     const isSelf = currentAdmin?.id === u.user_id || currentAdmin?.email === u.email;
                     return (
-                      <tr key={u.user_id} className="hover:bg-muted/30 transition-colors">
-                        {/* Name & Email */}
-                        <td className="py-3.5 pl-4 sm:pl-6">
+                      <tr key={u.user_id} className="hover:bg-[#EFF4FF]/30 transition-colors">
+                        {/* Name & Contact */}
+                        <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                            <Avatar className="h-8 w-8 ring-1 ring-[#1E40AF]/20">
+                              <AvatarFallback className="bg-[#EFF4FF] text-[#1E40AF] text-xs font-bold">
                                 {getInitials(u.full_name)}
                               </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <p className="font-semibold text-foreground leading-snug flex items-center gap-1.5">
+                              <Link
+                                href={`/admin/users/${u.user_id}`}
+                                className="font-semibold text-[#1E40AF] hover:underline"
+                              >
                                 {u.full_name}
-                                {isSelf && (
-                                  <span className="text-[10px] text-primary font-normal bg-primary/10 px-1 rounded">
-                                    You
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                              </Link>
+                              <p className="text-[11px] text-[#64748B] truncate">{u.email}</p>
+                              {u.phone && (
+                                <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                  <Phone className="h-2.5 w-2.5" />
+                                  {u.phone}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
 
-                        {/* Role */}
-                        <td className="py-3.5 px-3">
-                          <Badge
-                            variant={u.role === "admin" ? "default" : "outline"}
-                            className="capitalize text-xs font-normal"
-                          >
-                            {u.role === "admin" ? "Admin" : "User"}
-                          </Badge>
+                        {/* Academic Profile */}
+                        <td className="py-3 px-4">
+                          <p className="font-medium text-[#334155]">
+                            {u.specialization || u.course_name || "Computer Science"}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-[#64748B] mt-0.5">
+                            <span>{u.course_name || "B.Tech"}</span>
+                            <span>•</span>
+                            <span>{u.current_semester_year || "Semester 4"}</span>
+                          </div>
                         </td>
 
-                        {/* Account Classification */}
-                        <td className="py-3.5 px-3">
+                        {/* Institution */}
+                        <td className="py-3 px-4 text-[#334155]">
+                          <span className="font-medium truncate max-w-[160px] block">
+                            {u.university_college || "Technical University"}
+                          </span>
+                          <span className="text-[10px] text-[#64748B]">
+                            {u.academic_qualification || "Undergraduate"}
+                          </span>
+                        </td>
+
+                        {/* Role */}
+                        <td className="py-3 px-4">
                           <Badge
-                            variant="secondary"
+                            variant="outline"
                             className={
-                              u.account_type === "student"
-                                ? "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 capitalize text-xs"
-                                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 capitalize text-xs"
+                              u.role === "super_admin"
+                                ? "bg-[#DC2626] text-white border-[#DC2626] font-bold uppercase text-[10px]"
+                                : u.role === "admin"
+                                ? "bg-[#FEE2E2] text-[#DC2626] border-[#DC2626]/20 font-bold uppercase text-[10px]"
+                                : u.role === "moderator"
+                                ? "bg-amber-100 text-amber-900 border-amber-300 font-bold uppercase text-[10px]"
+                                : "bg-[#EFF4FF] text-[#1E40AF] border-[#1E40AF]/20 uppercase text-[10px]"
                             }
                           >
-                            {u.account_type === "student" ? (
-                              <span className="flex items-center gap-1">
-                                <GraduationCap className="h-3 w-3" />
-                                Student
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1">
-                                <UserCheck className="h-3 w-3" />
-                                Regular
-                              </span>
-                            )}
+                            {u.role}
                           </Badge>
                         </td>
 
                         {/* Status */}
-                        <td className="py-3.5 px-3">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium">
-                            <span
-                              className={`h-2 w-2 rounded-full ${
-                                u.status === "active" ? "bg-emerald-500" : "bg-destructive"
-                              }`}
-                            />
-                            {u.status === "active" ? "Active" : "Inactive"}
-                          </span>
+                        <td className="py-3 px-4">
+                          <Badge
+                            className={
+                              u.status === "active"
+                                ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200"
+                                : u.status === "suspended"
+                                ? "bg-[#DC2626] text-white hover:bg-[#DC2626]"
+                                : "bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200"
+                            }
+                          >
+                            {u.status}
+                          </Badge>
                         </td>
 
-                        {/* Created At */}
-                        <td className="py-3.5 px-3 text-xs text-muted-foreground">
-                          {u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}
+                        {/* Last Active */}
+                        <td className="py-3 px-4 text-[#64748B]">
+                          {u.last_active_at
+                            ? new Date(u.last_active_at).toLocaleDateString()
+                            : new Date(u.created_at).toLocaleDateString()}
                         </td>
 
-                        {/* Actions Dropdown */}
-                        <td className="py-3.5 pr-4 sm:pr-6 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Open user actions">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem
-                                onClick={() => handleViewDetails(u.user_id)}
-                                className="cursor-pointer"
-                              >
-                                <Eye className="mr-2 h-4 w-4 text-muted-foreground" />
-                                View Details
-                              </DropdownMenuItem>
+                        {/* Actions */}
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-[#1E40AF] hover:bg-[#EFF4FF]">
+                              <Link href={`/admin/users/${u.user_id}`}>
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                Dossier
+                              </Link>
+                            </Button>
 
-                              <DropdownMenuItem
-                                onClick={() => handleOpenEdit(u)}
-                                className="cursor-pointer"
-                              >
-                                <Edit className="mr-2 h-4 w-4 text-muted-foreground" />
-                                Edit Info
-                              </DropdownMenuItem>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-xs w-44">
+                                <DropdownMenuItem onClick={() => openEditModal(u)}>
+                                  <Edit className="mr-2 h-3.5 w-3.5 text-[#1E40AF]" />
+                                  Edit Information
+                                </DropdownMenuItem>
 
-                              {!isSelf && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={() => handleToggleStatus(u)}
-                                    className="cursor-pointer"
-                                  >
-                                    {u.status === "active" ? (
-                                      <>
-                                        <XCircle className="mr-2 h-4 w-4 text-destructive" />
-                                        Deactivate User
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CheckCircle className="mr-2 h-4 w-4 text-emerald-500" />
-                                        Activate User
-                                      </>
-                                    )}
-                                  </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setStatusTargetUser(u);
+                                    setStatusAction(u.status === "active" ? "inactive" : "active");
+                                  }}
+                                  disabled={isSelf}
+                                >
+                                  {u.status === "active" ? (
+                                    <>
+                                      <XCircle className="mr-2 h-3.5 w-3.5 text-amber-600" />
+                                      Deactivate User
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="mr-2 h-3.5 w-3.5 text-emerald-600" />
+                                      Activate User
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
 
-                                  <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setStatusTargetUser(u);
+                                    setStatusAction(u.status === "suspended" ? "active" : "suspended");
+                                  }}
+                                  disabled={isSelf}
+                                  className="text-[#DC2626]"
+                                >
+                                  <AlertTriangle className="mr-2 h-3.5 w-3.5" />
+                                  {u.status === "suspended" ? "Lift Suspension" : "Suspend Account"}
+                                </DropdownMenuItem>
 
-                                  <DropdownMenuItem
-                                    onClick={() => setDeletingUser(u)}
-                                    className="cursor-pointer text-destructive focus:text-destructive"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete User
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setRoleTargetUser(u);
+                                    setRoleAction(u.role === "admin" ? "user" : "admin");
+                                  }}
+                                  disabled={isSelf}
+                                >
+                                  <Shield className="mr-2 h-3.5 w-3.5 text-[#1E40AF]" />
+                                  Change Role ({u.role})
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuItem
+                                  onClick={() => setDeletingUser(u)}
+                                  disabled={isSelf}
+                                  className="text-[#DC2626] focus:text-[#DC2626]"
+                                >
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                  Delete Account
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -449,206 +569,89 @@ export default function AdminUsersPage() {
               </table>
             </div>
           )}
-
-          {/* Pagination Bar */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-3 sm:px-6">
-              <p className="text-xs text-muted-foreground">
-                Showing page <span className="font-semibold text-foreground">{page}</span> of{" "}
-                <span className="font-semibold text-foreground">{totalPages}</span>
-              </p>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1 || loading}
-                  className="h-8 text-xs"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages || loading}
-                  className="h-8 text-xs"
-                >
-                  Next
-                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* 1. View User Details Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>User Profile & Activity</DialogTitle>
-            <DialogDescription>
-              Registered user metadata and learning statistics.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div>
+          Showing page <strong>{page}</strong> of <strong>{totalPages}</strong> ({totalUsers} total registered)
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+            className="h-8 text-xs"
+          >
+            <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages || loading}
+            className="h-8 text-xs"
+          >
+            Next
+            <ChevronRight className="h-3.5 w-3.5 ml-1" />
+          </Button>
+        </div>
+      </div>
 
-          {detailLoading ? (
-            <div className="py-8 flex justify-center">
-              <LoadingSpinner size="md" />
-            </div>
-          ) : selectedUserDetail ? (
-            <div className="space-y-4 py-2">
-              <div className="flex items-center gap-3 border-b pb-4">
-                <Avatar className="h-12 w-12">
-                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                    {getInitials(selectedUserDetail.user.full_name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h4 className="font-semibold text-base leading-tight">
-                    {selectedUserDetail.user.full_name}
-                  </h4>
-                  <p className="text-xs text-muted-foreground">{selectedUserDetail.user.email}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="rounded-lg bg-muted/40 p-2.5">
-                  <span className="text-muted-foreground block mb-0.5">Role</span>
-                  <span className="font-semibold capitalize text-foreground">
-                    {selectedUserDetail.user.role}
-                  </span>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-2.5">
-                  <span className="text-muted-foreground block mb-0.5">Classification</span>
-                  <span className="font-semibold capitalize text-foreground">
-                    {selectedUserDetail.user.account_type || "student"}
-                  </span>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-2.5">
-                  <span className="text-muted-foreground block mb-0.5">Account Status</span>
-                  <span
-                    className={`font-semibold capitalize ${
-                      selectedUserDetail.user.status === "active"
-                        ? "text-emerald-600"
-                        : "text-destructive"
-                    }`}
-                  >
-                    {selectedUserDetail.user.status}
-                  </span>
-                </div>
-                <div className="rounded-lg bg-muted/40 p-2.5">
-                  <span className="text-muted-foreground block mb-0.5">Daily Max Hours</span>
-                  <span className="font-semibold text-foreground">
-                    {selectedUserDetail.user.daily_max_hours ?? 4.0} hrs/day
-                  </span>
-                </div>
-              </div>
-
-              {/* Study Stats */}
-              <div className="rounded-lg border p-3 bg-card">
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-                  Academic & Learning Metrics
-                </p>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded bg-muted/30 p-2">
-                    <span className="text-lg font-bold block text-primary">
-                      {selectedUserDetail.stats.study_plans_count}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">Study Plans</span>
-                  </div>
-                  <div className="rounded bg-muted/30 p-2">
-                    <span className="text-lg font-bold block text-teal-600">
-                      {selectedUserDetail.stats.study_sessions_count}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">Sessions</span>
-                  </div>
-                  <div className="rounded bg-muted/30 p-2">
-                    <span className="text-lg font-bold block text-emerald-600">
-                      {selectedUserDetail.stats.quizzes_attempted_count}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">Quizzes</span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-muted-foreground">
-                User ID: <code className="bg-muted px-1 py-0.5 rounded text-[10px]">{selectedUserDetail.user.user_id}</code>
-              </p>
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsDetailOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 2. Edit User Dialog */}
+      {/* Edit User Modal */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit User Information</DialogTitle>
-            <DialogDescription>
-              Update permitted user profile attributes.
+            <DialogTitle className="text-[#1E40AF]">Edit User Academic Profile</DialogTitle>
+            <DialogDescription className="text-xs">
+              Update credentials and verified educational details for this account.
             </DialogDescription>
           </DialogHeader>
 
           {editError && (
-            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2 text-xs text-destructive">
+            <div className="rounded-lg bg-[#FEE2E2] p-2.5 text-xs text-[#DC2626] border border-[#DC2626]/20">
               {editError}
             </div>
           )}
 
-          <div className="space-y-3.5 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-name" className="text-xs">Full Name</Label>
+          <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+            <div>
+              <Label className="text-xs">Full Name</Label>
               <Input
-                id="edit-name"
                 value={editFormData.full_name}
                 onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
-                className="h-9 text-sm"
+                required
+                className="mt-1 h-8 text-xs"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-email" className="text-xs">Email Address</Label>
+            <div>
+              <Label className="text-xs">Email Address</Label>
               <Input
-                id="edit-email"
                 type="email"
                 value={editFormData.email}
                 onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                className="h-9 text-sm"
+                required
+                className="mt-1 h-8 text-xs"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-type" className="text-xs">Account Classification</Label>
-                <select
-                  id="edit-type"
-                  value={editFormData.account_type}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      account_type: e.target.value as "student" | "regular",
-                    })
-                  }
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="student">Student</option>
-                  <option value="regular">Regular User</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-hours" className="text-xs">Daily Max Hours (0.5 - 24)</Label>
+              <div>
+                <Label className="text-xs">Phone Number</Label>
                 <Input
-                  id="edit-hours"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  placeholder="+91..."
+                  className="mt-1 h-8 text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Daily Max Hours</Label>
+                <Input
                   type="number"
                   step="0.5"
                   min="0.5"
@@ -657,62 +660,183 @@ export default function AdminUsersPage() {
                   onChange={(e) =>
                     setEditFormData({ ...editFormData, daily_max_hours: parseFloat(e.target.value) || 4 })
                   }
-                  className="h-9 text-sm"
+                  className="mt-1 h-8 text-xs"
                 />
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Course Name</Label>
+                <Input
+                  value={editFormData.course_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, course_name: e.target.value })}
+                  className="mt-1 h-8 text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Semester / Year</Label>
+                <Input
+                  value={editFormData.current_semester_year}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, current_semester_year: e.target.value })
+                  }
+                  className="mt-1 h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Specialization</Label>
+              <Input
+                value={editFormData.specialization}
+                onChange={(e) => setEditFormData({ ...editFormData, specialization: e.target.value })}
+                className="mt-1 h-8 text-xs"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs">University / College</Label>
+              <Input
+                value={editFormData.university_college}
+                onChange={(e) => setEditFormData({ ...editFormData, university_college: e.target.value })}
+                className="mt-1 h-8 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingUser(null)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={editSaving}
+                className="bg-[#1E40AF] hover:bg-[#1E40AF]/90 text-white text-xs"
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Account Status Dialog */}
+      <Dialog open={!!statusTargetUser} onOpenChange={(open) => !open && setStatusTargetUser(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">
+              Confirm Status Change: {statusAction.toUpperCase()}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Are you sure you want to change account status for{" "}
+              <strong>{statusTargetUser?.full_name}</strong> to{" "}
+              <Badge className="ml-1 uppercase text-[10px]">{statusAction}</Badge>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setEditingUser(null)}
-              disabled={editSaving}
+              onClick={() => setStatusTargetUser(null)}
+              className="text-xs"
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSaveEdit} disabled={editSaving}>
-              {editSaving ? "Saving..." : "Save Changes"}
+            <Button
+              size="sm"
+              onClick={handleConfirmStatus}
+              disabled={statusLoading}
+              className={
+                statusAction === "suspended"
+                  ? "bg-[#DC2626] hover:bg-[#DC2626]/90 text-white text-xs"
+                  : "bg-[#1E40AF] hover:bg-[#1E40AF]/90 text-white text-xs"
+              }
+            >
+              {statusLoading ? "Updating..." : "Confirm Status"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 3. Confirm Delete Dialog */}
-      <Dialog open={!!deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)}>
-        <DialogContent className="sm:max-w-md">
+      {/* Role Change Dialog */}
+      <Dialog open={!!roleTargetUser} onOpenChange={(open) => !open && setRoleTargetUser(null)}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Confirm Account Deletion
-            </DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete user{" "}
-              <strong className="text-foreground">{deletingUser?.full_name}</strong> (
-              {deletingUser?.email})?
+            <DialogTitle className="text-base font-bold">Update Administrative Role</DialogTitle>
+            <DialogDescription className="text-xs">
+              Assign role privileges for <strong>{roleTargetUser?.full_name}</strong>.
             </DialogDescription>
           </DialogHeader>
 
-          <p className="text-xs text-muted-foreground">
-            This action is permanent and will cascade-delete all study plans, topics, learning
-            sessions, and quiz attempts associated with this user.
-          </p>
+          <div className="py-2">
+            <Label className="text-xs">Selected Role</Label>
+            <select
+              aria-label="Select administrative role"
+              value={roleAction}
+              onChange={(e) => setRoleAction(e.target.value as any)}
+              className="mt-1.5 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="user">User (Student Access)</option>
+              <option value="moderator">Moderator (Uploads & Read Analytics)</option>
+              <option value="admin">Admin (Full Administrative Access)</option>
+              <option value="super_admin">Super Admin (System Governance)</option>
+            </select>
+          </div>
 
-          <DialogFooter className="mt-4">
+          <DialogFooter className="pt-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setDeletingUser(null)}
-              disabled={deleteLoading}
+              onClick={() => setRoleTargetUser(null)}
+              className="text-xs"
             >
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              size="sm"
+              onClick={handleConfirmRole}
+              disabled={roleLoading}
+              className="bg-[#1E40AF] hover:bg-[#1E40AF]/90 text-white text-xs"
+            >
+              {roleLoading ? "Assigning..." : "Update Role"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Dialog */}
+      <Dialog open={!!deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#DC2626]">
+              Permanent Account Deletion
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Are you sure you want to delete <strong>{deletingUser?.full_name}</strong> ({deletingUser?.email})?
+              All associated study plans, sessions, uploads, and quiz records will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeletingUser(null)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
               size="sm"
               onClick={handleConfirmDelete}
               disabled={deleteLoading}
+              className="bg-[#DC2626] hover:bg-[#DC2626]/90 text-white text-xs"
             >
               {deleteLoading ? "Deleting..." : "Permanently Delete"}
             </Button>
@@ -722,4 +846,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-

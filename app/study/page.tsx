@@ -306,7 +306,7 @@ export default function StudySessionPage() {
                   <span
                     className={cn(
                       "h-2.5 w-2.5 rounded-full transition-colors",
-                      isTimerRunning ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/40"
+                      isTimerRunning ? "bg-[#DC2626] animate-pulse" : "bg-muted-foreground/40"
                     )}
                   />
                   <span className="text-sm font-semibold text-foreground">Live Study Session Timer</span>
@@ -336,7 +336,7 @@ export default function StudySessionPage() {
                 <Button
                   type="button"
                   onClick={() => setIsTimerRunning(true)}
-                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
+                  className="gap-2 bg-[#1E40AF] hover:bg-[#1E40AF]/90 text-white font-medium shadow-sm"
                   size="sm"
                 >
                   <Play className="h-4 w-4 fill-white" />

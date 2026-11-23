@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import User from "../models/User.js";
 import { generateAccessToken, generateRefreshToken, verifyToken } from "../utils/jwt.js";
+import { logActivity, createNotification } from "./activityService.js";
 
 const BCRYPT_SALT_ROUNDS = 12;
 
@@ -34,7 +35,28 @@ export const registerUser = async ({ full_name, email, password, role = "user" }
     role: assignedRole,
     status: "active",
     account_type: assignedAccountType,
+    last_active_at: new Date(),
+    course_name: "Computer Science",
+    specialization: "Computer Science & Engineering",
   });
+
+  // Log user registration & notify admins
+  logActivity({
+    userId: newUser.user_id,
+    userName: newUser.full_name,
+    userEmail: newUser.email,
+    activityType: "registration",
+    description: `User ${newUser.full_name} (${newUser.email}) registered on the platform.`,
+    metadata: { role: assignedRole, account_type: assignedAccountType },
+  }).catch(() => {});
+
+  createNotification({
+    type: "new_user",
+    title: "New User Registration",
+    message: `${newUser.full_name} registered as a ${assignedAccountType} (${assignedRole}).`,
+    severity: "info",
+    metadata: { user_id: newUser.user_id, email: newUser.email },
+  }).catch(() => {});
 
   return {
     user_id: newUser.user_id,
@@ -70,6 +92,13 @@ export const loginUser = async ({ email, password }) => {
     throw error;
   }
 
+  if (user.status === "suspended") {
+    const error = new Error("Your account has been suspended by an administrator.");
+    error.statusCode = 403;
+    error.code = "ACCOUNT_SUSPENDED";
+    throw error;
+  }
+
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
   if (!isPasswordValid) {
     const error = new Error("Invalid email or password.");
@@ -77,6 +106,25 @@ export const loginUser = async ({ email, password }) => {
     error.code = "INVALID_CREDENTIALS";
     throw error;
   }
+
+  // Update last_login_at and last_active_at
+  const now = new Date();
+  if (typeof User.updateOne === "function") {
+    User.updateOne(
+      { user_id: user.user_id },
+      { $set: { last_login_at: now, last_active_at: now } }
+    ).catch(() => {});
+  }
+
+  // Record login activity
+  logActivity({
+    userId: user.user_id,
+    userName: user.full_name,
+    userEmail: user.email,
+    activityType: "login",
+    description: `User logged in from web portal.`,
+    metadata: { role: user.role, account_type: user.account_type },
+  }).catch(() => {});
 
   const payload = {
     user_id: user.user_id,

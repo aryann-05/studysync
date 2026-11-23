@@ -30,12 +30,13 @@ export function Sidebar({ className }: { className?: string }) {
     >
       <div className="flex h-16 items-center gap-2 border-b px-6">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary text-white shadow">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#1E40AF] to-[#3B82F6] text-white shadow-sm">
             <GraduationCap className="h-5 w-5" />
           </span>
-          <span className="text-lg font-bold tracking-tight">{APP_NAME}</span>
+          <span className="text-lg font-bold tracking-tight text-[#1E40AF] dark:text-white">{APP_NAME}</span>
         </Link>
       </div>
+
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4 scrollbar-thin" aria-label="Sidebar">
         <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

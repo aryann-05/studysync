@@ -44,25 +44,25 @@ export function ChartContainer({
 export function getChartColors() {
   if (typeof window === "undefined") {
     return {
-      primary: "#059669",
-      secondary: "#047857",
-      accent: "#10B981",
+      primary: "#1E40AF",
+      secondary: "#3B82F6",
+      accent: "#DC2626",
       warning: "#F59E0B",
-      destructive: "#EF4444",
-      grid: "#D1FAE5",
-      text: "#475569",
+      destructive: "#DC2626",
+      grid: "#E2E8F0",
+      text: "#64748B",
     };
   }
 
   const isDark = document.documentElement.classList.contains("dark");
   return {
-    primary: isDark ? "#10B981" : "#059669",
-    secondary: isDark ? "#059669" : "#047857",
-    accent: isDark ? "#34D399" : "#10B981",
+    primary: isDark ? "#3B82F6" : "#1E40AF",
+    secondary: isDark ? "#60A5FA" : "#3B82F6",
+    accent: isDark ? "#EF4444" : "#DC2626",
     warning: isDark ? "#FBBF24" : "#F59E0B",
-    destructive: isDark ? "#F87171" : "#EF4444",
-    grid: isDark ? "#134E3F" : "#D1FAE5",
-    text: isDark ? "#A7F3D0" : "#475569",
+    destructive: isDark ? "#EF4444" : "#DC2626",
+    grid: isDark ? "#334155" : "#E2E8F0",
+    text: isDark ? "#94A3B8" : "#64748B",
   };
 }
 

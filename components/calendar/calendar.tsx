@@ -29,7 +29,7 @@ function getStatusColor(topic: Topic): string {
     case "studying":
       return "bg-amber-500";
     default:
-      return "bg-teal-600";
+      return "bg-[#1E40AF]";
   }
 }
 
@@ -202,8 +202,8 @@ export function Calendar({ onSelectDay }: CalendarProps) {
   }
 
   const legend = [
-    { label: "New", color: "bg-teal-600" },
-    { label: "Revision", color: "bg-violet-500" },
+    { label: "New", color: "bg-[#1E40AF]" },
+    { label: "Revision", color: "bg-[#3B82F6]" },
     { label: "Completed", color: "bg-emerald-500" },
     { label: "Missed", color: "bg-red-500" },
   ];

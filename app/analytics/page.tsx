@@ -84,7 +84,7 @@ export default function AnalyticsPage() {
           title="Mastery"
           value={`${masteryScore}%`}
           icon={Brain}
-          iconClassName="bg-emerald-600/10 text-emerald-600 dark:text-emerald-400"
+          iconClassName="bg-[#FEE2E2] text-[#DC2626] dark:bg-red-950/40 dark:text-red-400"
           trend="up"
           trendValue="4%"
         />

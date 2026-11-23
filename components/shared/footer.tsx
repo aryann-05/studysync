@@ -29,7 +29,7 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-8 md:grid-cols-6">
           <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary text-white shadow">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#1E40AF] to-[#3B82F6] text-white shadow">
                 <GraduationCap className="h-5 w-5" />
               </span>
               <span className="text-lg font-bold tracking-tight">{APP_NAME}</span>

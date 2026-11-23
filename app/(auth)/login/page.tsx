@@ -157,7 +157,7 @@ export default function LoginPage() {
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <ShieldCheck className={cn("h-4 w-4", selectedRole === "admin" ? "text-amber-500" : "")} />
+            <ShieldCheck className={cn("h-4 w-4", selectedRole === "admin" ? "text-[#DC2626]" : "")} />
             <span>Admin Portal</span>
           </button>
         </div>
@@ -166,7 +166,7 @@ export default function LoginPage() {
       {/* Role-Specific Header */}
       {selectedRole === "admin" ? (
         <div className="text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 mb-2.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#FEE2E2] text-[#DC2626] dark:bg-red-950/40 dark:text-red-400 border border-[#DC2626]/20 mb-2.5">
             <ShieldCheck className="h-3.5 w-3.5" />
             Administrator Access
           </div>

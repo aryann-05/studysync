@@ -7,6 +7,7 @@ import {
 } from "../services/quizService.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import { formatDateOnly } from "../utils/dateUtils.js";
+import { logActivity } from "../services/activityService.js";
 
 /**
  * List all quizzes for the user's active study plan
@@ -83,6 +84,21 @@ export const submitQuiz = async (req, res, next) => {
     }
 
     const result = await gradeAndSubmitQuiz(userId, quiz_id, answers);
+
+    logActivity({
+      userId,
+      activityType: "test_completion",
+      description: `Completed test: "${result.quiz_title || "Quiz"}" with score ${result.score}/${result.total_marks} (${result.percentage}%) - ${result.grade}`,
+      metadata: {
+        quiz_id,
+        quiz_title: result.quiz_title,
+        score: result.score,
+        total_marks: result.total_marks,
+        percentage: result.percentage,
+        grade: result.grade,
+      },
+    }).catch(() => {});
+
     return sendSuccess(res, "Quiz evaluated successfully", result);
   } catch (error) {
     next(error);

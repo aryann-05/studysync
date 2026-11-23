@@ -1,4 +1,4 @@
-import { get, patch, del } from "./api";
+import { get, patch, del, post } from "./api";
 import type {
   ApiResponse,
   AdminDashboardStats,
@@ -7,164 +7,36 @@ import type {
   AdminUser,
   AdminUploadItem,
   AdminUploadsResponse,
+  CategoriesAnalyticsResponse,
+  CategoryUsersResponse,
+  ActivityAnalyticsResponse,
+  TestAnalyticsResponse,
+  LearningAnalyticsResponse,
+  EngagementAnalyticsResponse,
+  NotificationsResponse,
+  AuditLogsResponse,
 } from "@/types";
 
-const MOCK_ADMIN_USERS: AdminUser[] = [
-  {
-    user_id: "usr-admin-1",
-    full_name: "StudySync Admin",
-    email: "admin@studysync.com",
-    role: "admin",
-    status: "active",
-    account_type: "regular",
-    daily_max_hours: 4.0,
-    created_at: new Date(Date.now() - 3600000 * 24 * 30).toISOString(),
-  },
-  {
-    user_id: "usr-std-1",
-    full_name: "Alex Thompson",
-    email: "alex.thompson@example.com",
-    role: "user",
-    status: "active",
-    account_type: "student",
-    daily_max_hours: 4.0,
-    created_at: new Date(Date.now() - 3600000 * 24 * 14).toISOString(),
-  },
-  {
-    user_id: "usr-std-2",
-    full_name: "Sophia Martinez",
-    email: "sophia.m@example.com",
-    role: "user",
-    status: "active",
-    account_type: "student",
-    daily_max_hours: 3.5,
-    created_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString(),
-  },
-  {
-    user_id: "usr-reg-3",
-    full_name: "David Kim",
-    email: "david.kim@example.com",
-    role: "user",
-    status: "active",
-    account_type: "regular",
-    daily_max_hours: 5.0,
-    created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
-  },
-  {
-    user_id: "usr-std-4",
-    full_name: "Emma Wilson",
-    email: "emma.wilson@example.com",
-    role: "user",
-    status: "inactive",
-    account_type: "student",
-    daily_max_hours: 2.0,
-    created_at: new Date(Date.now() - 3600000 * 24 * 1).toISOString(),
-  },
-];
-
-const MOCK_ADMIN_UPLOADS: AdminUploadItem[] = [
-  {
-    upload_id: "upl-mock-1",
-    original_name: "MCA_Advanced_Data_Structures.pdf",
-    stored_name: "MCA_Advanced_Data_Structures.pdf",
-    mime_type: "application/pdf",
-    size: 2450000,
-    document_type: "pdf",
-    uploaded_at: new Date(Date.now() - 3600000 * 3).toISOString(),
-    extracted_topics_count: 16,
-    user: {
-      user_id: "usr-std-1",
-      full_name: "Alex Thompson",
-      email: "alex.thompson@example.com",
-      role: "user",
-      account_type: "student",
-      status: "active",
-    },
-  },
-  {
-    upload_id: "upl-mock-2",
-    original_name: "Computer_Networks_Unit_1_to_4.pdf",
-    stored_name: "Computer_Networks_Unit_1_to_4.pdf",
-    mime_type: "application/pdf",
-    size: 4120000,
-    document_type: "pdf",
-    uploaded_at: new Date(Date.now() - 3600000 * 18).toISOString(),
-    extracted_topics_count: 24,
-    user: {
-      user_id: "usr-std-2",
-      full_name: "Sophia Martinez",
-      email: "sophia.m@example.com",
-      role: "user",
-      account_type: "student",
-      status: "active",
-    },
-  },
-  {
-    upload_id: "upl-mock-3",
-    original_name: "Software_Testing_QA_Manual.docx",
-    stored_name: "Software_Testing_QA_Manual.docx",
-    mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 1280000,
-    document_type: "docx",
-    uploaded_at: new Date(Date.now() - 3600000 * 36).toISOString(),
-    extracted_topics_count: 12,
-    user: {
-      user_id: "usr-reg-3",
-      full_name: "David Kim",
-      email: "david.kim@example.com",
-      role: "user",
-      account_type: "regular",
-      status: "active",
-    },
-  },
-  {
-    upload_id: "upl-mock-4",
-    original_name: "Operating_Systems_Process_Scheduling.pdf",
-    stored_name: "Operating_Systems_Process_Scheduling.pdf",
-    mime_type: "application/pdf",
-    size: 3840000,
-    document_type: "pdf",
-    uploaded_at: new Date(Date.now() - 3600000 * 50).toISOString(),
-    extracted_topics_count: 18,
-    user: {
-      user_id: "usr-std-4",
-      full_name: "Emma Wilson",
-      email: "emma.wilson@example.com",
-      role: "user",
-      account_type: "student",
-      status: "inactive",
-    },
-  },
-  {
-    upload_id: "upl-mock-5",
-    original_name: "Cloud_Computing_AWS_Azure_Notes.txt",
-    stored_name: "Cloud_Computing_AWS_Azure_Notes.txt",
-    mime_type: "text/plain",
-    size: 94000,
-    document_type: "txt",
-    uploaded_at: new Date(Date.now() - 3600000 * 75).toISOString(),
-    extracted_topics_count: 9,
-    user: {
-      user_id: "usr-std-1",
-      full_name: "Alex Thompson",
-      email: "alex.thompson@example.com",
-      role: "user",
-      account_type: "student",
-      status: "active",
-    },
-  },
-];
-
 /**
- * Fetch real system overview stats for Admin Dashboard
+ * Fetch overview statistics for Super Admin Dashboard
  */
-export async function getDashboardStats(): Promise<ApiResponse<AdminDashboardStats>> {
+export async function getDashboardStats(params?: {
+  range?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<ApiResponse<AdminDashboardStats>> {
   try {
+    const query = new URLSearchParams();
+    if (params?.range) query.set("range", params.range);
+    if (params?.startDate) query.set("startDate", params.startDate);
+    if (params?.endDate) query.set("endDate", params.endDate);
+
+    const queryString = query.toString() ? `?${query.toString()}` : "";
     const res = await get<{
       status: string;
       message: string;
       data: AdminDashboardStats;
-    }>("/admin/dashboard/stats");
+    }>(`/admin/dashboard/stats${queryString}`);
 
     return {
       success: true,
@@ -174,50 +46,54 @@ export async function getDashboardStats(): Promise<ApiResponse<AdminDashboardSta
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    // Fallback when backend is disconnected/offline
-    return {
-      success: true,
-      data: {
-        total_users: 128,
-        total_students: 96,
-        total_regular_users: 31,
-        active_users: 124,
-        inactive_users: 4,
-        total_admins: 1,
-        recent_registrations: MOCK_ADMIN_USERS.slice(1, 5),
-      },
-    };
+    throw err;
   }
 }
 
 /**
- * Fetch paginated list of registered users with search and filtering
+ * Fetch paginated, filterable list of registered users
  */
-export async function getUsers(params?: {
+export async function getUsers({
+  page = 1,
+  limit = 10,
+  search = "",
+  role,
+  status,
+  account_type,
+  course_name,
+  specialization,
+  sort_by = "created_at",
+  sort_order = "desc",
+}: {
   page?: number;
   limit?: number;
   search?: string;
   role?: string;
   status?: string;
   account_type?: string;
-}): Promise<ApiResponse<AdminUsersResponse>> {
+  course_name?: string;
+  specialization?: string;
+  sort_by?: string;
+  sort_order?: string;
+} = {}): Promise<ApiResponse<AdminUsersResponse>> {
   try {
     const query = new URLSearchParams();
-    if (params?.page) query.set("page", String(params.page));
-    if (params?.limit) query.set("limit", String(params.limit));
-    if (params?.search) query.set("search", params.search);
-    if (params?.role) query.set("role", params.role);
-    if (params?.status) query.set("status", params.status);
-    if (params?.account_type) query.set("account_type", params.account_type);
-
-    const queryString = query.toString();
-    const endpoint = `/admin/users${queryString ? `?${queryString}` : ""}`;
+    if (page) query.set("page", String(page));
+    if (limit) query.set("limit", String(limit));
+    if (search) query.set("search", search);
+    if (role && role !== "all") query.set("role", role);
+    if (status && status !== "all") query.set("status", status);
+    if (account_type && account_type !== "all") query.set("account_type", account_type);
+    if (course_name && course_name !== "all") query.set("course_name", course_name);
+    if (specialization && specialization !== "all") query.set("specialization", specialization);
+    if (sort_by) query.set("sort_by", sort_by);
+    if (sort_order) query.set("sort_order", sort_order);
 
     const res = await get<{
       status: string;
       message: string;
       data: AdminUsersResponse;
-    }>(endpoint);
+    }>(`/admin/users?${query.toString()}`);
 
     return {
       success: true,
@@ -227,50 +103,16 @@ export async function getUsers(params?: {
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    // Fallback when backend is offline
-    let filtered = [...MOCK_ADMIN_USERS];
-    if (params?.search) {
-      const q = params.search.toLowerCase();
-      filtered = filtered.filter(
-        (u) => u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
-      );
-    }
-    if (params?.role && params.role !== "all") {
-      filtered = filtered.filter((u) => u.role === params.role);
-    }
-    if (params?.status && params.status !== "all") {
-      filtered = filtered.filter((u) => u.status === params.status);
-    }
-    if (params?.account_type && params.account_type !== "all") {
-      filtered = filtered.filter((u) => u.account_type === params.account_type);
-    }
-
-    const page = params?.page || 1;
-    const limit = params?.limit || 10;
-    const startIndex = (page - 1) * limit;
-    const paginated = filtered.slice(startIndex, startIndex + limit);
-
-    return {
-      success: true,
-      data: {
-        users: paginated,
-        pagination: {
-          total_users: filtered.length,
-          page,
-          limit,
-          total_pages: Math.ceil(filtered.length / limit) || 1,
-          has_next_page: startIndex + limit < filtered.length,
-          has_prev_page: page > 1,
-        },
-      },
-    };
+    throw err;
   }
 }
 
 /**
- * Fetch user details by ID including learning statistics
+ * Retrieve individual user complete profile dossier (12 sections)
  */
-export async function getUserById(id: string): Promise<ApiResponse<AdminUserDetailResponse>> {
+export async function getUserById(
+  id: string
+): Promise<ApiResponse<AdminUserDetailResponse>> {
   try {
     const res = await get<{
       status: string;
@@ -286,32 +128,16 @@ export async function getUserById(id: string): Promise<ApiResponse<AdminUserDeta
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    const found = MOCK_ADMIN_USERS.find((u) => u.user_id === id) || MOCK_ADMIN_USERS[1];
-    return {
-      success: true,
-      data: {
-        user: found,
-        stats: {
-          study_plans_count: 2,
-          study_sessions_count: 14,
-          quizzes_attempted_count: 6,
-        },
-      },
-    };
+    throw err;
   }
 }
 
 /**
- * Update permitted user profile fields
+ * Update user details
  */
 export async function updateUser(
   id: string,
-  data: {
-    full_name?: string;
-    email?: string;
-    daily_max_hours?: number;
-    account_type?: "student" | "regular";
-  }
+  data: Partial<AdminUser>
 ): Promise<ApiResponse<AdminUser>> {
   try {
     const res = await patch<{
@@ -328,29 +154,22 @@ export async function updateUser(
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    const found = MOCK_ADMIN_USERS.find((u) => u.user_id === id) || MOCK_ADMIN_USERS[1];
-    return {
-      success: true,
-      data: {
-        ...found,
-        ...data,
-      },
-    };
+    throw err;
   }
 }
 
 /**
- * Toggle user account status (active | inactive)
+ * Toggle user account status (active, inactive, suspended)
  */
 export async function updateUserStatus(
   id: string,
-  status: "active" | "inactive"
-): Promise<ApiResponse<AdminUser>> {
+  status: "active" | "inactive" | "suspended"
+): Promise<ApiResponse<{ user_id: string; status: string }>> {
   try {
     const res = await patch<{
       status: string;
       message: string;
-      data: AdminUser;
+      data: { user_id: string; status: string };
     }>(`/admin/users/${id}/status`, { status });
 
     return {
@@ -361,21 +180,42 @@ export async function updateUserStatus(
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    const found = MOCK_ADMIN_USERS.find((u) => u.user_id === id) || MOCK_ADMIN_USERS[1];
-    return {
-      success: true,
-      data: {
-        ...found,
-        status,
-      },
-    };
+    throw err;
   }
 }
 
 /**
- * Delete a user account and associated study records
+ * Update user administrative role (super_admin, admin, moderator, user)
  */
-export async function deleteUser(id: string): Promise<ApiResponse<{ user_id: string }>> {
+export async function updateUserRole(
+  id: string,
+  role: "super_admin" | "admin" | "moderator" | "user"
+): Promise<ApiResponse<{ user_id: string; role: string }>> {
+  try {
+    const res = await patch<{
+      status: string;
+      message: string;
+      data: { user_id: string; role: string };
+    }>(`/admin/users/${id}/role`, { role });
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Delete user account with cascading cleanup
+ */
+export async function deleteUser(
+  id: string
+): Promise<ApiResponse<{ user_id: string }>> {
   try {
     const res = await del<{
       status: string;
@@ -391,39 +231,20 @@ export async function deleteUser(id: string): Promise<ApiResponse<{ user_id: str
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    return {
-      success: true,
-      data: { user_id: id },
-    };
+    throw err;
   }
 }
 
 /**
- * Fetch all student and user uploads with associated user details
+ * Academic Category Analytics
  */
-export async function getAdminUploads(params?: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  file_type?: string;
-  user_id?: string;
-}): Promise<ApiResponse<AdminUploadsResponse>> {
+export async function getCategories(): Promise<ApiResponse<CategoriesAnalyticsResponse>> {
   try {
-    const query = new URLSearchParams();
-    if (params?.page) query.set("page", String(params.page));
-    if (params?.limit) query.set("limit", String(params.limit));
-    if (params?.search) query.set("search", params.search);
-    if (params?.file_type) query.set("file_type", params.file_type);
-    if (params?.user_id) query.set("user_id", params.user_id);
-
-    const queryString = query.toString();
-    const endpoint = `/admin/uploads${queryString ? `?${queryString}` : ""}`;
-
     const res = await get<{
       status: string;
       message: string;
-      data: AdminUploadsResponse;
-    }>(endpoint);
+      data: CategoriesAnalyticsResponse;
+    }>("/admin/categories");
 
     return {
       success: true,
@@ -433,70 +254,140 @@ export async function getAdminUploads(params?: {
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    // Fallback when backend is disconnected/offline
-    let filtered = [...MOCK_ADMIN_UPLOADS];
-
-    if (params?.file_type && params.file_type !== "all") {
-      filtered = filtered.filter((u) => u.document_type === params.file_type);
-    }
-
-    if (params?.user_id) {
-      filtered = filtered.filter((u) => u.user.user_id === params.user_id);
-    }
-
-    if (params?.search) {
-      const q = params.search.toLowerCase();
-      filtered = filtered.filter(
-        (u) =>
-          u.original_name.toLowerCase().includes(q) ||
-          u.user.full_name.toLowerCase().includes(q) ||
-          u.user.email.toLowerCase().includes(q)
-      );
-    }
-
-    const totalUploads = MOCK_ADMIN_UPLOADS.length;
-    const totalSizeBytes = MOCK_ADMIN_UPLOADS.reduce((acc, u) => acc + u.size, 0);
-    const pdfCount = MOCK_ADMIN_UPLOADS.filter((u) => u.document_type === "pdf").length;
-    const docxTxtCount = MOCK_ADMIN_UPLOADS.filter((u) =>
-      ["docx", "txt", "document"].includes(u.document_type)
-    ).length;
-    const uniqueUsersCount = new Set(MOCK_ADMIN_UPLOADS.map((u) => u.user.user_id)).size;
-
-    const page = params?.page || 1;
-    const limit = params?.limit || 10;
-    const startIndex = (page - 1) * limit;
-    const paginated = filtered.slice(startIndex, startIndex + limit);
-
-    return {
-      success: true,
-      data: {
-        uploads: paginated,
-        stats: {
-          total_uploads: totalUploads,
-          total_size_bytes: totalSizeBytes,
-          pdf_count: pdfCount,
-          docx_txt_count: docxTxtCount,
-          unique_users_count: uniqueUsersCount,
-        },
-        pagination: {
-          total_uploads: filtered.length,
-          page,
-          limit,
-          total_pages: Math.ceil(filtered.length / limit) || 1,
-          has_next_page: startIndex + limit < filtered.length,
-          has_prev_page: page > 1,
-        },
-      },
-    };
+    throw err;
   }
 }
 
 /**
- * Fetch single upload details with full student info
+ * Get users belonging to a specific category
  */
-export async function getAdminUploadById(
-  id: string
-): Promise<ApiResponse<AdminUploadItem>> {
+export async function getCategoryUsers(
+  categoryName: string,
+  params?: { page?: number; limit?: number }
+): Promise<ApiResponse<CategoryUsersResponse>> {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.limit) query.set("limit", String(params.limit));
+
+    const res = await get<{
+      status: string;
+      message: string;
+      data: CategoryUsersResponse;
+    }>(`/admin/categories/${encodeURIComponent(categoryName)}/users?${query.toString()}`);
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * User Activity Logs & Timeline
+ */
+export async function getUserActivities({
+  userId,
+  activityType,
+  startDate,
+  endDate,
+  search,
+  page = 1,
+  limit = 25,
+}: {
+  userId?: string;
+  activityType?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<ApiResponse<ActivityAnalyticsResponse>> {
+  try {
+    const query = new URLSearchParams();
+    if (userId) query.set("userId", userId);
+    if (activityType) query.set("activityType", activityType);
+    if (startDate) query.set("startDate", startDate);
+    if (endDate) query.set("endDate", endDate);
+    if (search) query.set("search", search);
+    if (page) query.set("page", String(page));
+    if (limit) query.set("limit", String(limit));
+
+    const res = await get<{
+      status: string;
+      message: string;
+      data: ActivityAnalyticsResponse;
+    }>(`/admin/activity?${query.toString()}`);
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * User Uploads Management
+ */
+export async function getAdminUploads({
+  page = 1,
+  limit = 10,
+  search = "",
+  file_type = "all",
+  category = "all",
+  moderation_status = "all",
+  user_id = "",
+}: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  file_type?: string;
+  category?: string;
+  moderation_status?: string;
+  user_id?: string;
+} = {}): Promise<ApiResponse<AdminUploadsResponse>> {
+  try {
+    const query = new URLSearchParams();
+    if (page) query.set("page", String(page));
+    if (limit) query.set("limit", String(limit));
+    if (search) query.set("search", search);
+    if (file_type && file_type !== "all") query.set("file_type", file_type);
+    if (category && category !== "all") query.set("category", category);
+    if (moderation_status && moderation_status !== "all") query.set("moderation_status", moderation_status);
+    if (user_id) query.set("user_id", user_id);
+
+    const res = await get<{
+      status: string;
+      message: string;
+      data: AdminUploadsResponse;
+    }>(`/admin/uploads?${query.toString()}`);
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Get upload by ID
+ */
+export async function getAdminUploadById(id: string): Promise<ApiResponse<AdminUploadItem>> {
   try {
     const res = await get<{
       status: string;
@@ -512,21 +403,40 @@ export async function getAdminUploadById(
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    const found =
-      MOCK_ADMIN_UPLOADS.find((u) => u.upload_id === id) || MOCK_ADMIN_UPLOADS[0];
-    return {
-      success: true,
-      data: found,
-    };
+    throw err;
   }
 }
 
 /**
- * Delete an upload from admin panel
+ * Moderate an upload (approve, flag, reject)
  */
-export async function deleteAdminUpload(
-  id: string
-): Promise<ApiResponse<{ upload_id: string }>> {
+export async function moderateAdminUpload(
+  id: string,
+  moderation_status: "approved" | "pending" | "flagged" | "rejected"
+): Promise<ApiResponse<{ upload_id: string; moderation_status: string }>> {
+  try {
+    const res = await patch<{
+      status: string;
+      message: string;
+      data: { upload_id: string; moderation_status: string };
+    }>(`/admin/uploads/${id}/moderate`, { moderation_status });
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Delete upload
+ */
+export async function deleteAdminUpload(id: string): Promise<ApiResponse<{ upload_id: string }>> {
   try {
     const res = await del<{
       status: string;
@@ -542,9 +452,191 @@ export async function deleteAdminUpload(
     if (err?.response?.data?.message) {
       throw new Error(err.response.data.message);
     }
-    return {
-      success: true,
-      data: { upload_id: id },
-    };
+    throw err;
   }
 }
+
+/**
+ * Test Management & Performance Analytics
+ */
+export async function getTestAnalytics({
+  userId,
+  subject,
+  status,
+  search,
+  page = 1,
+  limit = 20,
+}: {
+  userId?: string;
+  subject?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<ApiResponse<TestAnalyticsResponse>> {
+  try {
+    const query = new URLSearchParams();
+    if (userId) query.set("userId", userId);
+    if (subject && subject !== "all") query.set("subject", subject);
+    if (status && status !== "all") query.set("status", status);
+    if (search) query.set("search", search);
+    if (page) query.set("page", String(page));
+    if (limit) query.set("limit", String(limit));
+
+    const res = await get<{
+      status: string;
+      message: string;
+      data: TestAnalyticsResponse;
+    }>(`/admin/tests?${query.toString()}`);
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Learning Insights Analytics
+ */
+export async function getLearningAnalytics(): Promise<ApiResponse<LearningAnalyticsResponse>> {
+  try {
+    const res = await get<{
+      status: string;
+      message: string;
+      data: LearningAnalyticsResponse;
+    }>("/admin/learning");
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * User Engagement & Retention Analytics
+ */
+export async function getEngagementAnalytics(): Promise<ApiResponse<EngagementAnalyticsResponse>> {
+  try {
+    const res = await get<{
+      status: string;
+      message: string;
+      data: EngagementAnalyticsResponse;
+    }>("/admin/engagement");
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Admin Notifications
+ */
+export async function getAdminNotifications(filter = "all"): Promise<ApiResponse<NotificationsResponse>> {
+  try {
+    const res = await get<{
+      status: string;
+      message: string;
+      data: NotificationsResponse;
+    }>(`/admin/notifications?filter=${filter}`);
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+export async function markNotificationRead(id: string): Promise<ApiResponse<any>> {
+  try {
+    const res = await patch<any>(`/admin/notifications/${id}/read`, {});
+    return { success: true, data: res.data };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+export async function markAllNotificationsRead(): Promise<ApiResponse<any>> {
+  try {
+    const res = await post<any>("/admin/notifications/mark-all-read", {});
+    return { success: true, data: res.data };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Security & Audit Logs
+ */
+export async function getAuditLogs(page = 1, limit = 30): Promise<ApiResponse<AuditLogsResponse>> {
+  try {
+    const res = await get<{
+      status: string;
+      message: string;
+      data: AuditLogsResponse;
+    }>(`/admin/security/audit-logs?page=${page}&limit=${limit}`);
+
+    return {
+      success: true,
+      data: res.data,
+    };
+  } catch (err: any) {
+    if (err?.response?.data?.message) {
+      throw new Error(err.response.data.message);
+    }
+    throw err;
+  }
+}
+
+export default {
+  getDashboardStats,
+  getUsers,
+  getUserById,
+  updateUser,
+  updateUserStatus,
+  updateUserRole,
+  deleteUser,
+  getCategories,
+  getCategoryUsers,
+  getUserActivities,
+  getAdminUploads,
+  getAdminUploadById,
+  moderateAdminUpload,
+  deleteAdminUpload,
+  getTestAnalytics,
+  getLearningAnalytics,
+  getEngagementAnalytics,
+  getAdminNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getAuditLogs,
+};

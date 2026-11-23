@@ -24,7 +24,7 @@ const actions = [
     description: "Test & find weak topics",
     href: "/quiz",
     icon: HelpCircle,
-    color: "text-emerald-700 bg-emerald-600/10 dark:text-emerald-400 dark:bg-emerald-500/10",
+    color: "text-[#DC2626] bg-[#FEE2E2] dark:text-red-400 dark:bg-red-950/40",
   },
   {
     label: "View Calendar",

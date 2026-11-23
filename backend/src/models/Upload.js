@@ -37,8 +37,30 @@ const uploadSchema = new mongoose.Schema(
     },
     document_type: {
       type: String,
-      enum: ["pdf", "docx", "txt", "document"],
       default: "document",
+    },
+    subject: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    academic_category: {
+      type: String,
+      default: "Computer Science",
+      trim: true,
+      index: true,
+    },
+    processing_status: {
+      type: String,
+      enum: ["pending", "processed", "failed"],
+      default: "processed",
+      index: true,
+    },
+    moderation_status: {
+      type: String,
+      enum: ["approved", "pending", "flagged", "rejected"],
+      default: "approved",
+      index: true,
     },
     extracted_topics_count: {
       type: Number,

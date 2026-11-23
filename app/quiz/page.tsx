@@ -478,7 +478,7 @@ export default function QuizSectionPage() {
                     size="sm"
                     onClick={handleSubmitQuiz}
                     disabled={isSubmitting || answeredCount === 0}
-                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                    className="gap-1.5 bg-[#1E40AF] hover:bg-[#1E40AF]/90 text-white font-semibold shadow-sm"
                   >
                     {isSubmitting ? "Submitting & Grading..." : "Submit Quiz & View Marks"}
                   </Button>
@@ -650,7 +650,7 @@ export default function QuizSectionPage() {
                     key={quiz.quiz_id}
                     className={cn(
                       "flex flex-col justify-between border transition-all hover:border-primary/40 hover:shadow-md",
-                      isDone && "border-emerald-500/30 bg-emerald-500/[0.02]"
+                      isDone && "border-[#1E40AF]/30 bg-[#EFF4FF]/30"
                     )}
                   >
                     <CardHeader className="pb-3">

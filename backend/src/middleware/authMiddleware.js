@@ -44,13 +44,21 @@ export const authenticate = async (req, res, next) => {
       // If DB lookup fails or in decoupled mode
     }
 
-    if (user && user.status === "inactive") {
+    if (user && (user.status === "inactive" || user.status === "suspended")) {
+      const msg = user.status === "suspended"
+        ? "Your account has been suspended by an administrator."
+        : "Your account has been deactivated. Please contact an administrator.";
       return sendError(
         res,
-        "Your account has been deactivated. Please contact an administrator.",
-        "ACCOUNT_INACTIVE",
+        msg,
+        user.status === "suspended" ? "ACCOUNT_SUSPENDED" : "ACCOUNT_INACTIVE",
         403
       );
+    }
+
+    // Touch last_active_at asynchronously
+    if (user && typeof User.updateOne === "function") {
+      User.updateOne({ user_id: user.user_id }, { $set: { last_active_at: new Date() } }).catch(() => {});
     }
 
     req.user = user
@@ -62,6 +70,9 @@ export const authenticate = async (req, res, next) => {
           status: user.status || "active",
           account_type: user.account_type || "student",
           daily_max_hours: Number(user.daily_max_hours) || 4.0,
+          course_name: user.course_name || "Computer Science",
+          specialization: user.specialization || "Computer Science & Engineering",
+          university_college: user.university_college || "",
         }
       : {
           user_id: decoded.user_id,
@@ -71,6 +82,9 @@ export const authenticate = async (req, res, next) => {
           status: "active",
           account_type: "student",
           daily_max_hours: 4.0,
+          course_name: "Computer Science",
+          specialization: "Computer Science & Engineering",
+          university_college: "",
         };
 
     next();
@@ -141,8 +155,8 @@ export const optionalAuthenticate = async (req, res, next) => {
 };
 
 /**
- * Role-Based Authorization Middleware: Enforces that req.user has "admin" role.
- * Strictly exactly two roles in StudySync: "admin" and "user".
+ * Role-Based Authorization Middleware: Enforces that req.user has admin-tier privileges.
+ * Supports: "super_admin", "admin", "moderator".
  */
 export const requireAdmin = (req, res, next) => {
   if (!req.user) {
@@ -154,7 +168,8 @@ export const requireAdmin = (req, res, next) => {
     );
   }
 
-  if (req.user.role !== "admin") {
+  const allowedRoles = ["admin", "super_admin", "moderator"];
+  if (!allowedRoles.includes(req.user.role)) {
     return sendError(
       res,
       "Access denied. Admin privileges required.",
@@ -164,6 +179,52 @@ export const requireAdmin = (req, res, next) => {
   }
 
   next();
+};
+
+/**
+ * Super Admin Authorization: Restricts access exclusively to "super_admin" and full "admin"
+ */
+export const requireSuperAdmin = (req, res, next) => {
+  if (!req.user) {
+    return sendError(
+      res,
+      "Authentication required. Please log in.",
+      "UNAUTHORIZED",
+      401
+    );
+  }
+
+  const allowedRoles = ["super_admin", "admin"];
+  if (!allowedRoles.includes(req.user.role)) {
+    return sendError(
+      res,
+      "Access denied. Super Administrator privileges required.",
+      "FORBIDDEN",
+      403
+    );
+  }
+
+  next();
+};
+
+/**
+ * Flexible RBAC middleware for custom role sets
+ */
+export const requireRoles = (roles = []) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return sendError(res, "Authentication required.", "UNAUTHORIZED", 401);
+    }
+    if (!roles.includes(req.user.role)) {
+      return sendError(
+        res,
+        `Access denied. Requires one of: ${roles.join(", ")}`,
+        "FORBIDDEN",
+        403
+      );
+    }
+    next();
+  };
 };
 
 export default authenticate;

@@ -415,14 +415,14 @@ export function Chatbot() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 px-4 py-3 text-white shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-95"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-gradient-to-r from-[#1E40AF] via-[#3B82F6] to-[#DC2626] px-4 py-3 text-white shadow-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-95"
           aria-label="Open StudySync AI Assistant"
         >
           <div className="relative flex items-center justify-center">
             <Bot className="h-6 w-6" />
             <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#DC2626] opacity-75"></span>
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#DC2626]"></span>
             </span>
           </div>
           <span className="hidden sm:inline font-medium text-sm">
@@ -445,8 +445,8 @@ export function Chatbot() {
               <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow">
                 <Bot className="h-5 w-5" />
                 <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500 border-2 border-card"></span>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#DC2626] opacity-75"></span>
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-[#DC2626] border-2 border-card"></span>
                 </span>
               </div>
               <div>

@@ -611,7 +611,7 @@ export function TopicsPreview({
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-700 dark:text-emerald-300">
+          <div className="flex items-center gap-2 rounded-lg border border-[#1E40AF]/20 bg-[#EFF4FF] p-2.5 text-xs text-[#1E40AF] dark:text-[#3B82F6]">
             <Award className="h-4 w-4 shrink-0" />
             <span>
               Schedule capacity is balanced! {selectedEffort} hrs required out of {totalCapacity} hrs available.
